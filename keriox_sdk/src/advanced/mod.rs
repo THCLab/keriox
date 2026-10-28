@@ -4,7 +4,7 @@
 //! `Identity`, …) instead. This module exposes the full mid-level SDK —
 //! the alias-based [`store::KeriStore`], the low-level
 //! [`identifier::Identifier`], compound async
-//! [`operations`], CESR [`signing`] helpers, TEL ([`tel`]) queries, key
+//! [`operations`], CESR [`signing`] helpers, credential [`registry`] operations, key
 //! generation ([`keys`]) and raw protocol types — for use cases the facade
 //! does not cover: custom signing flows, direct KEL manipulation, weighted
 //! thresholds, out-of-band CESR transport, or building tooling on top of the
@@ -26,7 +26,7 @@ pub mod protocol;
 pub mod signing;
 pub mod status;
 pub mod store;
-pub mod tel;
+pub mod registry;
 pub mod types;
 
 #[cfg(feature = "keyprovider")]
@@ -45,9 +45,8 @@ pub use status::{
     supports_keri2,
 };
 pub use store::KeriStore;
-pub use tel::{check_credential_status, get_credential_status};
 pub use types::{
-    AbandonConfig, CredentialStatus, DelegationConfig, DelegationRequest, GroupAbandonConfig,
+    AbandonConfig, DelegationConfig, DelegationRequest, GroupAbandonConfig,
     GroupRotationConfig, IdentifierConfig,
     MultisigConfig, MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope,
     SignerAlgorithm, StorageConfig, StoreRotationConfig, VerificationIssue, VerifiedPayload,
@@ -83,8 +82,10 @@ pub use keri_core::{
     event::sections::seal::EventSeal, event_message::signature::Signature,
     prefix::IndexedSignature, query::query_event::QueryEvent,
 };
-pub use teliox::query::TelQueryEvent;
-pub use teliox::state::{vc_state::TelState, ManagerTelState};
+pub use teliox::registry::{
+    AcdcBinding, Blinding, Disclosure, Pending, Policy, Presentation, RegistryError,
+    RegistryState, Salt, StateBlock, Verdict,
+};
 
 /// Re-exports of the underlying crates for consumers who need types this
 /// module does not surface individually.

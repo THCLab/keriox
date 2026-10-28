@@ -40,9 +40,11 @@
 //! ([`Identity::kel`]), and you import it once with
 //! [`Keri::import_contact`].
 //!
-//! Credentials ([`Identity::issue`]) anchor a document's digest in a public
-//! registry so anyone can later check it has not been revoked
-//! ([`Keri::credential_status`], [`Identity::revoke`]).
+//! Credentials ([`Identity::issue`]) are ACDC 2.0 documents, each with a
+//! registry of its own whose blinded state the issuer anchors. The holder
+//! presents the credential with its registry, and a verifier judges the
+//! presentation against the issuer's key history
+//! ([`Keri::verify_credential`], [`Identity::revoke`]).
 //!
 //! Multi-party flows — delegation ([`IdentityBuilder::delegated_by`]) and
 //! group identities ([`Identity::new_group`]) — are modeled as a small
@@ -97,6 +99,12 @@ pub use requests::{DelegationApproval, DelegationHandle, PendingRequest};
 pub use retry::RetryPolicy;
 
 pub use advanced::types::StorageConfig;
+
+/// ACDC 2.0, re-exported to build and read credentials with the version
+/// keri-sdk uses.
+pub use acdc;
+/// Registry policy and verdicts, for [`Keri::verify_credential_with`].
+pub use teliox::registry::{AbandonedIssuer, Policy};
 
 /// The key provider interface, re-exported so that applications depend on
 /// keri-sdk alone and always get the version keri-sdk is built with.

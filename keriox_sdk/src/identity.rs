@@ -248,27 +248,34 @@ impl Identity {
         Ok(self.keri.store.load(&self.alias)?.is_abandoned())
     }
 
-    /// Issue a credential: anchor the payload's digest in this identity's
-    /// public registry so anyone can later check it has not been revoked.
+    /// Issue a credential: an ACDC of the schema with SAID `schema` and the
+    /// given attributes, in a private registry of its own. Hand the
+    /// returned [`crate::Credential::presentation`] to the holder.
     ///
-    /// The registry is created automatically on first issuance. JSON
-    /// payloads with a `d` field get the digest embedded (the standard
-    /// self-addressing layout); any other payload is digested as-is.
-    pub async fn issue(&self, payload: &[u8]) -> Result<crate::credential::Credential> {
+    /// The ACDC names its registry, so a verifier can bind the two; its
+    /// attributes are private (salted), and its registry's state is blinded
+    /// with a salt this identity keeps with its secrets.
+    pub async fn issue(
+        &self,
+        schema: &str,
+        attributes: acdc::Block,
+    ) -> Result<crate::credential::Credential> {
         match &self.keys {
             Keys::Software => {
                 let signer = self.keri.store.load_signer(&self.alias)?;
-                self.issue_with(signer, payload).await
+                self.issue_with(signer, schema, attributes).await
             }
             #[cfg(feature = "keyprovider")]
-            Keys::Provider { current, .. } => self.issue_with(current.clone(), payload).await,
+            Keys::Provider { current, .. } => {
+                self.issue_with(current.clone(), schema, attributes).await
+            }
         }
     }
 
-    /// Revoke a credential previously issued by this identity. The change
-    /// is published through the witnesses; status checks anywhere will see
-    /// `Revoked` once they refresh.
-    pub async fn revoke(&self, credential: &CredentialId) -> Result<()> {
+    /// Revoke a credential this identity issued. Returns its presentation in
+    /// the revoked state: verifiers learn of the revocation only when it is
+    /// presented to them, so deliver it to the holder.
+    pub async fn revoke(&self, credential: &CredentialId) -> Result<Vec<u8>> {
         match &self.keys {
             Keys::Software => {
                 let signer = self.keri.store.load_signer(&self.alias)?;
@@ -277,6 +284,19 @@ impl Identity {
             #[cfg(feature = "keyprovider")]
             Keys::Provider { current, .. } => self.revoke_with(current.clone(), credential).await,
         }
+    }
+
+    /// The current presentation of a credential this identity issued.
+    pub fn presentation(&self, credential: &CredentialId) -> Result<Vec<u8>> {
+        let (acdc, _) = self
+            .keri
+            .store
+            .load_credential(&self.alias, &credential.said().to_string())?;
+        let identifier = self.keri.store.load(&self.alias)?;
+        let presentation = crate::advanced::registry::presentation(&identifier, acdc)?;
+        Ok(presentation
+            .to_cesr()
+            .map_err(crate::advanced::Error::from)?)
     }
 
     /// The credentials this identity has issued (most recent last).
@@ -291,82 +311,58 @@ impl Identity {
             .collect()
     }
 
-    async fn issue_with<S>(&self, signer: S, payload: &[u8]) -> Result<crate::credential::Credential>
+    async fn issue_with<S>(
+        &self,
+        signer: S,
+        schema: &str,
+        attributes: acdc::Block,
+    ) -> Result<crate::credential::Credential>
     where
         S: crate::advanced::operations::SigningBackend + Clone + 'static,
     {
-        // First issuance creates the registry and persists its id, so the
-        // application never has to manage registry state itself.
-        let registry = match self.keri.store.load(&self.alias)?.registry_id() {
-            Some(r) => r.clone(),
-            None => {
-                let registry = crate::retry::with_retry(&self.keri.retry, || {
-                    let signer = signer.clone();
-                    async move {
-                        let mut identifier = self.keri.store.load(&self.alias)?;
-                        Ok(crate::advanced::operations::incept_registry(
-                            &mut identifier,
-                            signer,
-                        )
-                        .await?)
-                    }
-                })
-                .await?;
-                self.keri.store.save_registry(&self.alias, &registry)?;
-                registry
-            }
-        };
-
-        let (payload, said) = prepare_credential_payload(payload)?;
-
-        crate::retry::with_retry(&self.keri.retry, || {
+        let blinding = teliox::registry::Blinding::private();
+        let issuer = self.id.to_string();
+        let presentation = crate::retry::with_retry(&self.keri.retry, || {
             let signer = signer.clone();
-            let said = said.clone();
+            let (blinding, attributes, issuer) =
+                (blinding.clone(), attributes.clone(), issuer.clone());
             async move {
-                // Reload so the handle knows its registry and latest state.
                 let mut identifier = self.keri.store.load(&self.alias)?;
-                Ok(crate::advanced::operations::issue(&mut identifier, signer, said).await?)
+                Ok(crate::advanced::registry::issue(
+                    &mut identifier,
+                    signer,
+                    &blinding,
+                    |registry| build_acdc(&issuer, schema, registry, attributes),
+                )
+                .await?)
             }
         })
         .await?;
-
-        let id = CredentialId::new(registry, said);
-        self.append_credential_index(&id)?;
-        Ok(crate::credential::Credential {
-            id,
-            payload,
-            issuer: self.id.clone(),
-        })
+        credential(&self.keri, &self.alias, self.id.clone(), presentation, &blinding)
     }
 
-    async fn revoke_with<S>(&self, signer: S, credential: &CredentialId) -> Result<()>
+    async fn revoke_with<S>(&self, signer: S, credential: &CredentialId) -> Result<Vec<u8>>
     where
         S: crate::advanced::operations::SigningBackend + Clone + 'static,
     {
-        crate::retry::with_retry(&self.keri.retry, || {
-            let signer = signer.clone();
+        let (acdc, blinding) = self
+            .keri
+            .store
+            .load_credential(&self.alias, &credential.said().to_string())?;
+        let presentation = crate::retry::with_retry(&self.keri.retry, || {
+            let (signer, acdc, blinding) = (signer.clone(), acdc.clone(), blinding.clone());
             async move {
                 let mut identifier = self.keri.store.load(&self.alias)?;
                 Ok(
-                    crate::advanced::operations::revoke(&mut identifier, signer, credential.said())
+                    crate::advanced::registry::revoke(&mut identifier, signer, &blinding, acdc)
                         .await?,
                 )
             }
         })
-        .await
-    }
-
-    fn append_credential_index(&self, id: &CredentialId) -> Result<()> {
-        let mut content = self
-            .keri
-            .store
-            .read_meta(&self.alias, "credentials")?
-            .unwrap_or_default();
-        content.push_str(&format!("{id}\n"));
-        Ok(self
-            .keri
-            .store
-            .write_meta(&self.alias, "credentials", &content)?)
+        .await?;
+        Ok(presentation
+            .to_cesr()
+            .map_err(crate::advanced::Error::from)?)
     }
 
     /// This identity's full key history (KEL) as a CESR stream — for
@@ -528,18 +524,11 @@ impl Identity {
         let current_seed = self.keri.store.current_seed(&self.alias)?;
         let next_seed = self.keri.store.next_seed(&self.alias)?;
         let kel = self.kel()?;
-        let registry = self
-            .keri
-            .store
-            .load(&self.alias)?
-            .registry_id()
-            .map(|r| r.to_string());
         Ok(IdentityBackup {
             id: self.id.to_string(),
             current_seed: current_seed.to_str(),
             next_seed: next_seed.to_str(),
             kel,
-            registry,
             witnesses: self.witnesses().unwrap_or_default(),
         })
     }
@@ -605,11 +594,6 @@ async fn restore_identity(
 
     keri.store.save_seeds(alias, &current, &next)?;
     keri.store.save_id(alias, &id_prefix)?;
-    if let Some(registry) = &backup.registry {
-        if let Ok(registry) = keri_controller::IdentifierPrefix::from_str(registry) {
-            keri.store.save_registry(alias, &registry)?;
-        }
-    }
 
     // Ingest the backed-up key history.
     let controller = keri.store.controller_for(alias)?;
@@ -643,39 +627,54 @@ async fn restore_identity(
     })
 }
 
-/// Prepare a credential payload for issuance: JSON documents with a `d`
-/// field get the digest embedded (self-addressing data); anything else is
-/// digested as-is.
-pub(crate) fn prepare_credential_payload(
-    payload: &[u8],
-) -> Result<(Vec<u8>, keri_core::actor::prelude::SelfAddressingIdentifier)> {
-    use said::derivation::HashFunctionCode;
 
-    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(payload) {
-        if value.is_object() && value.get("d").is_some() {
-            let json = std::str::from_utf8(payload).map_err(|e| Error::InvalidInput {
-                expected: "UTF-8 JSON credential payload",
-                cause: e.to_string(),
-            })?;
-            let saidified =
-                crate::advanced::signing::saidify_json(json, HashFunctionCode::Blake3_256)?;
-            let value: serde_json::Value =
-                serde_json::from_str(&saidified).map_err(|e| Error::InvalidInput {
-                    expected: "JSON credential payload",
-                    cause: e.to_string(),
-                })?;
-            let said = value["d"]
-                .as_str()
-                .unwrap_or_default()
-                .parse()
-                .map_err(|e| Error::InvalidInput {
-                    expected: "self-addressing digest in `d` field",
-                    cause: format!("{e:?}"),
-                })?;
-            return Ok((saidified.into_bytes(), said));
-        }
-    }
-    Ok((payload.to_vec(), crate::advanced::signing::content_sai(payload)))
+/// The ACDC of a new credential: private attributes, naming its registry.
+pub(crate) fn build_acdc(
+    issuer: &str,
+    schema: &str,
+    registry: &said::SelfAddressingIdentifier,
+    attributes: acdc::Block,
+) -> std::result::Result<acdc::Acdc, acdc::error::Error> {
+    acdc::Acdc::builder(issuer, schema)
+        .private()
+        .registry(registry.to_string())
+        .attributes(attributes)
+        .build(acdc::Kind::Json, acdc::HashFunctionCode::Blake3_256)
+}
+
+/// Keeps a newly issued credential and its blinding under `alias`, indexes
+/// it, and returns it.
+pub(crate) fn credential(
+    keri: &crate::keri::KeriInner,
+    alias: &str,
+    issuer: IdentityId,
+    presentation: teliox::registry::Presentation,
+    blinding: &teliox::registry::Blinding,
+) -> Result<crate::credential::Credential> {
+    let binding = presentation
+        .binding()
+        .map_err(crate::advanced::Error::from)?;
+    let registry = binding.registry.clone().ok_or_else(|| Error::InvalidInput {
+        expected: "a credential naming its registry",
+        cause: "no `rd`".into(),
+    })?;
+    keri.store
+        .save_credential(alias, &presentation.acdc, blinding)?;
+    let id = CredentialId::new(
+        keri_controller::IdentifierPrefix::self_addressing(registry),
+        binding.said,
+    );
+    let mut index = keri.store.read_meta(alias, "credentials")?.unwrap_or_default();
+    index.push_str(&format!("{id}\n"));
+    keri.store.write_meta(alias, "credentials", &index)?;
+    Ok(crate::credential::Credential {
+        id,
+        acdc: presentation.acdc.clone(),
+        issuer,
+        presentation: presentation
+            .to_cesr()
+            .map_err(crate::advanced::Error::from)?,
+    })
 }
 
 /// A portable backup of an identity: seeds, key history, configuration.
@@ -689,7 +688,6 @@ pub struct IdentityBackup {
     pub(crate) current_seed: String,
     pub(crate) next_seed: String,
     pub(crate) kel: String,
-    pub(crate) registry: Option<String>,
     pub(crate) witnesses: Vec<String>,
 }
 

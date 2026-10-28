@@ -9,7 +9,7 @@ use keri_core::{
     processor::validator::VerificationError,
     state::{IdentifierState, IdentifierStatus},
 };
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::identifier::mechanics::cache::IdentifierCache;
 use crate::{
@@ -23,7 +23,7 @@ pub mod verifying;
 pub struct Controller<D, T, S>
 where
     D: EventDatabase + EscrowCreator + 'static,
-    T: TelEventDatabase + 'static,
+    T: RegistryStore + 'static,
     S: OobiStorageBackend,
 {
     pub known_events: Arc<KnownEvents<D, T, S>>,
@@ -34,7 +34,7 @@ where
 impl<D, T, S> Controller<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub async fn incept(
@@ -57,7 +57,6 @@ where
         let initialized_id = self.known_events.finalize_inception(event, sig).unwrap();
         Ok(Identifier::new(
             initialized_id,
-            None,
             self.known_events.clone(),
             self.communication.clone(),
             self.cache.clone(),

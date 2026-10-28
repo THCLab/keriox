@@ -17,14 +17,14 @@ async fn multi_delegator_single_delegatee(
     // Setup identifier for first group participant.
     let root_0 = Builder::new().prefix("test-db1").tempdir().unwrap();
     let (mut identifier1, km1, controller1) =
-        setup_identifier(root_0.path(), vec![witness_oobi.clone()], None, None).await;
+        setup_identifier(root_0.path(), vec![witness_oobi.clone()], None).await;
 
     assert!(identifier1.get_own_kel().is_some());
 
     // Setup identifier for second group participant.
     let root_1 = Builder::new().prefix("test-db2").tempdir().unwrap();
     let (mut identifier2, km2, controller2) =
-        setup_identifier(root_1.path(), vec![witness_oobi.clone()], None, None).await;
+        setup_identifier(root_1.path(), vec![witness_oobi.clone()], None).await;
 
     assert!(identifier2.get_own_kel().is_some());
 
@@ -159,7 +159,7 @@ async fn multi_delegator_single_delegatee(
     let delegatee_root = Builder::new().prefix("test-db2").tempdir().unwrap(); // Setup delegatee
 
     let (mut temporary_delegatee_identifier, delegatee_keypair, _) =
-        setup_identifier(delegatee_root.path(), vec![witness_oobi], None, None).await;
+        setup_identifier(delegatee_root.path(), vec![witness_oobi], None).await;
 
     // Generate delegated inception and exn, that is provide delegation request to delegator.
     let (delegated_inception, exn_messages) = temporary_delegatee_identifier.incept_group(

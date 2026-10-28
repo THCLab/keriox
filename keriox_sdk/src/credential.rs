@@ -1,22 +1,29 @@
-//! Credentials: documents whose issuance can be publicly revoked.
+//! Credentials: ACDC 2.0 documents whose state (issued, revoked) the issuer
+//! records in a registry of each credential's own.
 //!
-//! Issuing a credential records its digest in the issuer's public registry
-//! (a TEL — transaction event log). Anyone can later check whether the
-//! credential is still valid or has been revoked, without contacting the
-//! issuer directly.
+//! The registry's state is blinded: only the issuer, and the holder it
+//! hands the credential to, can tell it. The holder shows a verifier the
+//! credential together with its registry, a *presentation*; the verifier
+//! checks it against the issuer's key history. Nothing is looked up on the
+//! network: a verifier learns of a revocation when it is presented with the
+//! revoked state.
 
 use crate::ids::{CredentialId, IdentityId};
 
-/// The public lifecycle state of a credential.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What a verifier concludes about a presented credential.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CredentialStatus {
-    /// Issued and not revoked — valid.
+    /// Issued and not revoked, as presented — valid.
     Issued,
     /// Revoked by the issuer — no longer valid.
     Revoked,
-    /// Not found in any registry known to this store. Either it was never
-    /// issued, or the issuer's registry has not been imported/refreshed yet.
-    Unknown,
+    /// Not yet decidable: typically the issuer's key history does not yet
+    /// hold the events anchoring the presented registry. Refresh the
+    /// issuer ([`crate::Keri::import_contact`]) and try again.
+    Indeterminate(String),
+    /// The presentation does not hold: a broken or forked registry, a state
+    /// that is not this credential's, or an issuer the policy refuses.
+    Rejected(String),
 }
 
 impl CredentialStatus {
@@ -26,12 +33,18 @@ impl CredentialStatus {
     }
 }
 
-impl From<crate::advanced::types::CredentialStatus> for CredentialStatus {
-    fn from(s: crate::advanced::types::CredentialStatus) -> Self {
-        match s {
-            crate::advanced::types::CredentialStatus::Issued => CredentialStatus::Issued,
-            crate::advanced::types::CredentialStatus::Revoked => CredentialStatus::Revoked,
-            crate::advanced::types::CredentialStatus::Unknown => CredentialStatus::Unknown,
+impl From<teliox::registry::Verdict> for CredentialStatus {
+    fn from(verdict: teliox::registry::Verdict) -> Self {
+        use teliox::registry::Verdict;
+        match verdict {
+            Verdict::Valid { state, .. } => match state.state.as_deref() {
+                Some("issued") => CredentialStatus::Issued,
+                Some("revoked") => CredentialStatus::Revoked,
+                Some(other) => CredentialStatus::Rejected(format!("unknown state {other:?}")),
+                None => CredentialStatus::Rejected("the registry discloses no state".into()),
+            },
+            Verdict::Indeterminate(e) => CredentialStatus::Indeterminate(e.to_string()),
+            Verdict::Rejected(e) => CredentialStatus::Rejected(e.to_string()),
         }
     }
 }
@@ -39,19 +52,13 @@ impl From<crate::advanced::types::CredentialStatus> for CredentialStatus {
 /// A credential issued through [`crate::Identity::issue`].
 #[derive(Debug, Clone)]
 pub struct Credential {
-    /// The credential's id — give this to anyone who needs to check its
-    /// status; it is self-contained (`"<registry>:<digest>"`).
+    /// The credential's id: its registry and its SAID.
     pub id: CredentialId,
-    /// The credential document. If it was JSON with a `d` field, the field
-    /// now holds the credential's digest (SAID).
-    pub payload: Vec<u8>,
+    /// The ACDC.
+    pub acdc: acdc::Acdc,
     /// Who issued it.
     pub issuer: IdentityId,
-}
-
-impl Credential {
-    /// The payload as UTF-8 text, if it is text.
-    pub fn payload_str(&self) -> Option<&str> {
-        std::str::from_utf8(&self.payload).ok()
-    }
+    /// The credential with its registry as issued, as one CESR stream: hand
+    /// it to the holder, who shows it to verifiers.
+    pub presentation: Vec<u8>,
 }

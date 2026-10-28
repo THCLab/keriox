@@ -1,14 +1,18 @@
 //! End-to-end: the credential lifecycle.
 //!
-//! Issue a credential (the registry is created automatically), check its
-//! status, revoke it, and confirm the revocation is visible. Also proves the
-//! registry survives an application restart.
+//! An issuer issues a credential (an ACDC with a registry of its own) and
+//! revokes it; a verifier in another store judges what is presented to it.
+//! Nothing is looked up on the network: the verifier sees the state it is
+//! shown, and once it has seen the revocation, an older presentation no
+//! longer fools it. The issuer can still revoke after a restart.
 
 mod common;
 
 use common::TestInfra;
-use keri_sdk::CredentialStatus;
+use keri_sdk::{acdc::Block, CredentialStatus};
 use test_context::test_context;
+
+const SCHEMA: &str = "EOlgQaGgXI6Zqikg4I0KWaQeL9sRUGu7PUj78GekKnSf";
 
 #[test_context(TestInfra)]
 #[actix_rt::test]
@@ -22,79 +26,117 @@ async fn credential_lifecycle(infra: &mut TestInfra) {
         .expect("issuer identity");
 
     // ── Issue ─────────────────────────────────────────────────────────────
-    // First issuance also creates the public registry — no separate setup
-    // call, no registry id to keep track of.
     let diploma = issuer
-        .issue(br#"{"d":"","degree":"MSc Cryptography","holder":"bob"}"#)
+        .issue(SCHEMA, Block::new().with("degree", "MSc Cryptography"))
         .await
-        .expect("issuing first credential");
-
-    // The payload came back with the digest embedded in `d`.
-    let payload_text = diploma.payload_str().expect("payload is JSON text");
-    assert!(payload_text.contains(&diploma.id.digest()));
-
-    // The credential id is a plain self-contained string.
-    let id_text = diploma.id.to_string();
-    let parsed: keri_sdk::CredentialId = id_text.parse().unwrap();
+        .expect("issuing a credential");
+    assert_eq!(diploma.acdc.issuer(), issuer.id().to_string());
+    assert_eq!(
+        diploma.acdc.registry(),
+        Some(diploma.id.registry().as_str())
+    );
+    let parsed: keri_sdk::CredentialId = diploma.id.to_string().parse().unwrap();
     assert_eq!(parsed, diploma.id);
+    assert!(keri
+        .verify_credential(&diploma.presentation)
+        .unwrap()
+        .is_valid());
 
-    // ── Status: valid ─────────────────────────────────────────────────────
-    let status = keri.credential_status(&diploma.id).await.expect("status");
-    assert!(status.is_valid(), "freshly issued credential is valid");
-
-    // ── Revoke ────────────────────────────────────────────────────────────
-    issuer.revoke(&diploma.id).await.expect("revocation");
-    let status = keri.credential_status(&diploma.id).await.unwrap();
-    assert_eq!(status, CredentialStatus::Revoked);
-    assert!(!status.is_valid());
-
-    // ── Second issuance reuses the same registry ──────────────────────────
+    // Each credential has a registry of its own.
     let badge = issuer
-        .issue(b"employee badge #42 (opaque, non-JSON payload)")
+        .issue(SCHEMA, Block::new().with("badge", 42))
         .await
         .expect("second credential");
-    assert_eq!(badge.id.registry(), diploma.id.registry());
-    assert!(keri.credential_status(&badge.id).await.unwrap().is_valid());
+    assert_ne!(badge.id.registry(), diploma.id.registry());
+    assert_eq!(
+        issuer.credentials().unwrap(),
+        vec![diploma.id.clone(), badge.id.clone()]
+    );
 
-    // Both credentials are in the issuer's index.
-    let issued = issuer.credentials().unwrap();
-    assert_eq!(issued, vec![diploma.id.clone(), badge.id.clone()]);
+    // ── A verifier elsewhere ──────────────────────────────────────────────
+    let (_verifier_dir, verifier) = common::temp_keri();
+    verifier
+        .new_identity("checker")
+        .witness(&infra.witness.url)
+        .build()
+        .await
+        .expect("verifier identity");
+    // Not knowing the issuer yet, it cannot decide.
+    assert!(matches!(
+        verifier.verify_credential(&diploma.presentation).unwrap(),
+        CredentialStatus::Indeterminate(_)
+    ));
+    let oobi = issuer.oobi_url().expect("issuer has a witness");
+    verifier.import_contact(&oobi).await.expect("import issuer");
+    assert_eq!(
+        verifier.verify_credential(&diploma.presentation).unwrap(),
+        CredentialStatus::Issued
+    );
 
-    // ── Restart: registry id and statuses survive ─────────────────────────
+    // ── Restart, then revoke ──────────────────────────────────────────────
     drop(issuer);
     drop(keri);
     let keri = keri_sdk::Keri::open(store_dir.path()).unwrap();
     let issuer = keri.identity("acme").unwrap();
-
+    let revoked = issuer.revoke(&diploma.id).await.expect("revocation");
+    assert_eq!(issuer.presentation(&diploma.id).unwrap(), revoked);
     assert_eq!(
-        keri.credential_status(&diploma.id).await.unwrap(),
+        keri.verify_credential(&revoked).unwrap(),
         CredentialStatus::Revoked
     );
-    assert!(keri.credential_status(&badge.id).await.unwrap().is_valid());
 
-    // A third credential after restart still lands in the same registry —
-    // the registry id was persisted, not re-created.
-    let third = issuer.issue(b"third credential").await.unwrap();
-    assert_eq!(third.id.registry(), diploma.id.registry());
+    // The verifier sees the revocation once it is presented and the
+    // issuer's key history is refreshed; from then on the older
+    // presentation shows the revoked state too.
+    verifier
+        .import_contact(&oobi)
+        .await
+        .expect("refresh issuer");
+    assert_eq!(
+        verifier.verify_credential(&revoked).unwrap(),
+        CredentialStatus::Revoked
+    );
+    assert_eq!(
+        verifier.verify_credential(&diploma.presentation).unwrap(),
+        CredentialStatus::Revoked
+    );
+    assert!(verifier
+        .verify_credential(&badge.presentation)
+        .unwrap()
+        .is_valid());
 }
 
+/// A presentation altered after issuance is rejected, or refused outright
+/// when it no longer reads as one.
 #[test_context(TestInfra)]
 #[actix_rt::test]
-async fn unknown_credential_reports_unknown(infra: &mut TestInfra) {
+async fn an_altered_presentation_is_refused(infra: &mut TestInfra) {
     let (_dir, keri) = common::temp_keri();
-    keri.new_identity("acme")
+    let issuer = keri
+        .new_identity("acme")
         .witness(&infra.witness.url)
         .build()
         .await
         .unwrap();
+    let diploma = issuer
+        .issue(SCHEMA, Block::new().with("degree", "MSc"))
+        .await
+        .unwrap();
+    let other = issuer
+        .issue(SCHEMA, Block::new().with("degree", "PhD"))
+        .await
+        .unwrap();
 
-    // A syntactically valid credential id no registry has ever seen.
-    let ghost: keri_sdk::CredentialId =
-        "EJe6footPdcb6S7TKnEHEXgB-Ms_iH7krj0Ot4Vcjvr5:ELC5L3iBVD77d_MYbYGGCUQgqQBju1o4x1Ud-z2sL-ux"
-            .parse()
-            .unwrap();
-    assert_eq!(
-        keri.credential_status(&ghost).await.unwrap(),
-        CredentialStatus::Unknown
-    );
+    // The credential of one registry presented with the other's registry.
+    let acdc = diploma.acdc.raw();
+    let mut swapped = acdc.to_vec();
+    swapped.extend_from_slice(&other.presentation[other.acdc.raw().len()..]);
+    assert!(matches!(
+        keri.verify_credential(&swapped).unwrap(),
+        CredentialStatus::Rejected(_)
+    ));
+
+    let mut truncated = diploma.presentation.clone();
+    truncated.pop();
+    assert!(keri.verify_credential(&truncated).is_err());
 }

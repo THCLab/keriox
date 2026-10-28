@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use keri_core::database::redb::RedbDatabase;
 use keri_core::oobi_manager::storage::RedbOobiStorage;
-use teliox::database::redb::RedbTelDatabase;
+use teliox::registry::store::redb::RedbRegistryStore;
 
 use crate::identifier::mechanics::cache::IdentifierCache;
 use crate::{
@@ -12,8 +12,8 @@ use crate::{
 
 use super::Controller;
 
-pub type RedbController = Controller<RedbDatabase, RedbTelDatabase, RedbOobiStorage>;
-pub type RedbIdentifier = Identifier<RedbDatabase, RedbTelDatabase, RedbOobiStorage>;
+pub type RedbController = Controller<RedbDatabase, RedbRegistryStore, RedbOobiStorage>;
+pub type RedbIdentifier = Identifier<RedbDatabase, RedbRegistryStore, RedbOobiStorage>;
 
 impl RedbController {
     pub fn new(config: ControllerConfig) -> Result<Self, ControllerError> {
@@ -22,7 +22,6 @@ impl RedbController {
             initial_oobis,
             escrow_config,
             transport,
-            tel_transport,
             keri_version,
         } = config;
         std::fs::create_dir_all(&db_path).unwrap();
@@ -37,7 +36,6 @@ impl RedbController {
         let comm = Arc::new(Communication {
             events: events.clone(),
             transport,
-            tel_transport,
         });
 
         let controller = Self {
@@ -51,7 +49,7 @@ impl RedbController {
         Ok(controller)
     }
 
-    /// Fully in-memory controller: every database (KEL, TEL, OOBI, escrows,
+    /// Fully in-memory controller: every database (KEL, registries, OOBI, escrows,
     /// mailbox query cache) uses redb's `InMemoryBackend`. Nothing touches
     /// disk and all state is lost when the controller is dropped. The
     /// config's `db_path` is ignored.
@@ -61,7 +59,6 @@ impl RedbController {
             initial_oobis,
             escrow_config,
             transport,
-            tel_transport,
             keri_version,
         } = config;
 
@@ -72,7 +69,6 @@ impl RedbController {
         let comm = Arc::new(Communication {
             events: events.clone(),
             transport,
-            tel_transport,
         });
 
         let controller = Self {

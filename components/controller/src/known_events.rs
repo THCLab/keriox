@@ -12,7 +12,6 @@ use keri_core::prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSig
 
 use keri_core::processor::escrow::partially_witnessed_escrow::PartiallyWitnessedEscrow;
 use keri_core::processor::escrow::EscrowConfig;
-use keri_core::processor::notification::JustNotification;
 
 use keri_core::processor::Processor;
 use keri_core::state::IdentifierState;
@@ -31,11 +30,7 @@ use keri_core::{
     },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
-use teliox::database::TelEscrowDatabase;
-use teliox::database::TelEventDatabase;
-use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
-use teliox::processor::storage::TelEventStorage;
-use teliox::tel::Tel;
+use teliox::registry::RegistryStore;
 
 use crate::error::ControllerError;
 use crate::identifier::mechanics::MechanicsError;
@@ -57,14 +52,15 @@ impl From<keri_core::oobi::error::OobiError> for OobiRetrieveError {
 pub struct KnownEvents<D, T, S>
 where
     D: EventDatabase + EscrowCreator + 'static,
-    T: TelEventDatabase + 'static,
+    T: RegistryStore + 'static,
     S: OobiStorageBackend,
 {
     processor: BasicProcessor<D>,
     pub storage: Arc<EventStorage<D>>,
     pub oobi_manager: OobiManager<S>,
     pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D>>,
-    pub tel: Arc<Tel<T, D>>,
+    /// The registries this controller issues and the ones it accepted.
+    pub registries: Arc<T>,
     /// The KERI version the controller writes its messages in.
     pub version: KeriVersion,
 }
@@ -72,35 +68,25 @@ where
 impl<D, T, S> KnownEvents<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub fn new(
         event_db: Arc<D>,
         oobi_storage: S,
-        tel_db: Arc<T>,
-        tel_escrow_db: impl TelEscrowDatabase + 'static,
+        registries: Arc<T>,
         escrow_config: EscrowConfig,
     ) -> Result<Self, ControllerError> {
         let oobi_manager = OobiManager::with_storage(oobi_storage);
         let (notification_bus, escrow_set) =
             default_escrow_bus(event_db.clone(), escrow_config, None);
         let kel_storage = Arc::new(EventStorage::new(event_db.clone()));
-        let (tel_bus, missing_issuer, _out_of_order, _missing_registry) =
-            tel_escrow_bus(tel_db.clone(), kel_storage.clone(), tel_escrow_db)
-                .map_err(|e| ControllerError::OtherError(e.to_string()))?;
-        let tel_storage = Arc::new(TelEventStorage::new(tel_db.clone()));
-        let tel = Arc::new(Tel::new(tel_storage, kel_storage.clone(), Some(tel_bus)));
-        notification_bus.register_observer(
-            missing_issuer.clone(),
-            vec![JustNotification::KeyEventAdded],
-        );
         Ok(Self {
             processor: BasicProcessor::new(event_db.clone(), Some(notification_bus)),
             storage: kel_storage,
             oobi_manager,
             partially_witnessed_escrow: escrow_set.partially_witnessed,
-            tel,
+            registries,
             version: KeriVersion::default(),
         })
     }
@@ -475,12 +461,10 @@ use keri_core::database::redb::RedbDatabase;
 #[cfg(feature = "storage-redb")]
 use keri_core::oobi_manager::storage::RedbOobiStorage;
 #[cfg(feature = "storage-redb")]
-use teliox::database::redb::RedbTelDatabase;
-#[cfg(feature = "storage-redb")]
-use teliox::database::EscrowDatabase;
+use teliox::registry::store::redb::RedbRegistryStore;
 
 #[cfg(feature = "storage-redb")]
-pub type RedbKnownEvents = KnownEvents<RedbDatabase, RedbTelDatabase, RedbOobiStorage>;
+pub type RedbKnownEvents = KnownEvents<RedbDatabase, RedbRegistryStore, RedbOobiStorage>;
 
 #[cfg(feature = "storage-redb")]
 impl RedbKnownEvents {
@@ -498,31 +482,14 @@ impl RedbKnownEvents {
         };
         let oobi_storage = RedbOobiStorage::new(event_database.raw_db())
             .map_err(|e| ControllerError::DatabaseError(e.to_string()))?;
-        let tel_db = {
-            let mut path = db_path.clone();
-            path.push("tel");
-            path.push("events");
-            Arc::new(
-                RedbTelDatabase::new(&path)
-                    .map_err(|e| ControllerError::OtherError(e.to_string()))?,
-            )
-        };
-        let tel_escrow_db = {
-            let mut path = db_path.clone();
-            path.push("tel");
-            path.push("escrow");
-            EscrowDatabase::new(&path).map_err(|e| ControllerError::OtherError(e.to_string()))?
-        };
-        Self::new(
-            event_database,
-            oobi_storage,
-            tel_db,
-            tel_escrow_db,
-            escrow_config,
-        )
+        let registries = Arc::new(
+            RedbRegistryStore::with_database(event_database.raw_db())
+                .map_err(|e| ControllerError::DatabaseError(e.to_string()))?,
+        );
+        Self::new(event_database, oobi_storage, registries, escrow_config)
     }
 
-    /// Fully in-memory event store (redb `InMemoryBackend` for the KEL, TEL,
+    /// Fully in-memory event store (redb `InMemoryBackend` for the KEL, registries,
     /// OOBI and escrow databases). Nothing touches disk; all state lives
     /// exactly as long as this instance. Intended for tests, ephemeral
     /// agents and embedded use without filesystem access.
@@ -533,19 +500,11 @@ impl RedbKnownEvents {
         );
         let oobi_storage = RedbOobiStorage::new(event_database.raw_db())
             .map_err(|e| ControllerError::DatabaseError(e.to_string()))?;
-        let tel_db = Arc::new(
-            RedbTelDatabase::new_in_memory()
-                .map_err(|e| ControllerError::OtherError(e.to_string()))?,
+        let registries = Arc::new(
+            RedbRegistryStore::with_database(event_database.raw_db())
+                .map_err(|e| ControllerError::DatabaseError(e.to_string()))?,
         );
-        let tel_escrow_db = EscrowDatabase::new_in_memory()
-            .map_err(|e| ControllerError::OtherError(e.to_string()))?;
-        Self::new(
-            event_database,
-            oobi_storage,
-            tel_db,
-            tel_escrow_db,
-            escrow_config,
-        )
+        Self::new(event_database, oobi_storage, registries, escrow_config)
     }
 }
 
@@ -554,11 +513,11 @@ use keri_core::database::postgres::oobi_storage::PostgresOobiStorage;
 #[cfg(feature = "storage-postgres")]
 use keri_core::database::postgres::PostgresDatabase;
 #[cfg(feature = "storage-postgres")]
-use teliox::database::postgres::{PostgresTelDatabase, PostgresTelEscrowDatabase};
+use teliox::registry::store::postgres::PostgresRegistryStore;
 
 #[cfg(feature = "storage-postgres")]
 pub type PostgresKnownEvents =
-    KnownEvents<PostgresDatabase, PostgresTelDatabase, PostgresOobiStorage>;
+    KnownEvents<PostgresDatabase, PostgresRegistryStore, PostgresOobiStorage>;
 
 #[cfg(feature = "storage-postgres")]
 impl PostgresKnownEvents {
@@ -576,8 +535,7 @@ impl PostgresKnownEvents {
             .await
             .map_err(|e| ControllerError::DatabaseError(e.to_string()))?;
         let oobi_storage = PostgresOobiStorage::new(event_db.pool.clone());
-        let tel_db = Arc::new(PostgresTelDatabase::new(event_db.pool.clone()));
-        let tel_escrow_db = PostgresTelEscrowDatabase::new(event_db.pool.clone());
-        Self::new(event_db, oobi_storage, tel_db, tel_escrow_db, escrow_config)
+        let registries = Arc::new(PostgresRegistryStore::new(event_db.pool.clone()));
+        Self::new(event_db, oobi_storage, registries, escrow_config)
     }
 }

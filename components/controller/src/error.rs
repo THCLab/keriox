@@ -51,7 +51,7 @@ pub enum ControllerError {
     VerificationError(Vec<(VerificationError, String)>),
 
     #[error(transparent)]
-    TelError(#[from] teliox::error::Error),
+    RegistryError(#[from] teliox::registry::RegistryError),
 
     #[error("Error: {0}")]
     OtherError(String),

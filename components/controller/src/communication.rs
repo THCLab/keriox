@@ -1,13 +1,11 @@
-use std::sync::{Arc, OnceLock};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
 
 use futures::future::join_all;
-use tracing::{debug, instrument};
 use keri_core::{
     actor::{error::ActorError, parse_event_stream, possible_response::PossibleResponse},
     database::{EscrowCreator, EventDatabase},
     event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
-    oobi::{EndRole, LocationScheme, Oobi, Scheme},
+    oobi::{EndRole, LocationScheme, Oobi},
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix},
     query::{
@@ -16,9 +14,7 @@ use keri_core::{
     },
     transport::{Transport, TransportError},
 };
-use teliox::{
-    database::TelEventDatabase, event::verifiable_event::VerifiableEvent, query::SignedTelQuery,
-};
+use teliox::registry::RegistryStore;
 
 use crate::{
     error::ControllerError,
@@ -68,29 +64,26 @@ impl From<TransportError> for SendingError {
 pub struct Communication<D, T, S>
 where
     D: EventDatabase + EscrowCreator + 'static,
-    T: TelEventDatabase + 'static,
+    T: RegistryStore + 'static,
     S: OobiStorageBackend,
 {
     pub events: Arc<KnownEvents<D, T, S>>,
     pub transport: Box<dyn Transport + Send + Sync>,
-    pub tel_transport: Box<dyn IdentifierTelTransport + Send + Sync>,
 }
 
 impl<D, T, S> Communication<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub fn new(
         known_events: Arc<KnownEvents<D, T, S>>,
         transport: Box<dyn Transport<ActorError> + Send + Sync>,
-        tel_transport: Box<dyn IdentifierTelTransport + Send + Sync>,
     ) -> Self {
         Communication {
             events: known_events,
             transport,
-            tel_transport,
         }
     }
 
@@ -244,189 +237,5 @@ where
         }
 
         Ok(())
-    }
-
-    pub async fn send_tel_query(
-        &self,
-        qry: SignedTelQuery,
-        location: LocationScheme,
-    ) -> Result<String, SendingError> {
-        self.tel_transport.send_query(qry, location).await
-    }
-
-    pub async fn send_tel_event(
-        &self,
-        event: VerifiableEvent,
-        location: LocationScheme,
-    ) -> Result<(), SendingError> {
-        self.tel_transport.send_tel_event(event, location).await
-    }
-}
-
-#[async_trait::async_trait]
-pub trait IdentifierTelTransport {
-    async fn send_query(
-        &self,
-        qry: SignedTelQuery,
-        location: LocationScheme,
-    ) -> Result<String, SendingError>;
-    async fn send_tel_event(
-        &self,
-        qry: VerifiableEvent,
-        location: LocationScheme,
-    ) -> Result<(), SendingError>;
-}
-
-pub struct HTTPTelTransport;
-
-/// Process-wide HTTP client for the controller's TEL transport. See
-/// `keri_core::transport::default` for rationale and the
-/// `KERIOX_DISABLE_HTTP_POOL` A/B-toggle env var.
-fn shared_http_client() -> reqwest::Client {
-    fn build() -> reqwest::Client {
-        reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30))
-            .pool_idle_timeout(Duration::from_secs(90))
-            .pool_max_idle_per_host(32)
-            .tcp_keepalive(Duration::from_secs(60))
-            .user_agent(keri_core::transport::client_version::CLIENT_AGENT)
-            .build()
-            .expect("Failed to build HTTP client")
-    }
-    if std::env::var_os("KERIOX_DISABLE_HTTP_POOL").is_some() {
-        return build();
-    }
-    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(build).clone()
-}
-
-/// The url of a location; a nullified one has none to reach.
-fn tel_url(location: &LocationScheme) -> Result<&url::Url, SendingError> {
-    location
-        .url
-        .as_ref()
-        .ok_or_else(|| SendingError::NullifiedLocation {
-            eid: location.eid.clone(),
-        })
-}
-
-#[async_trait::async_trait]
-impl IdentifierTelTransport for HTTPTelTransport {
-    #[instrument(skip_all, fields(host = location.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
-    async fn send_query(
-        &self,
-        qry: SignedTelQuery,
-        location: LocationScheme,
-    ) -> Result<String, SendingError> {
-        let url = match location.scheme {
-            Scheme::Http | Scheme::Https => tel_url(&location)?.join("query/tel")?,
-            Scheme::Tcp => {
-                return Err(SendingError::TransportError(
-                    TransportError::UnsupportedScheme(Scheme::Tcp),
-                ))
-            }
-        };
-        let started = Instant::now();
-        let resp = shared_http_client()
-            .post(url.clone())
-            .body(qry.to_cesr().unwrap())
-            .send()
-            .await?;
-
-        let status = resp.status();
-        let body = resp.text().await?;
-        debug!(
-            elapsed_ms = started.elapsed().as_millis() as u64,
-            status = status.as_u16(),
-            body_bytes = body.len(),
-            url = %url,
-            "controller tel send_query completed"
-        );
-        Ok(body)
-    }
-
-    #[instrument(skip_all, fields(host = location.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
-    async fn send_tel_event(
-        &self,
-        event: VerifiableEvent,
-        location: LocationScheme,
-    ) -> Result<(), SendingError> {
-        let url = match location.scheme {
-            Scheme::Http | Scheme::Https => tel_url(&location)?.join("process/tel")?,
-            Scheme::Tcp => {
-                return Err(SendingError::TransportError(
-                    TransportError::UnsupportedScheme(Scheme::Tcp),
-                ))
-            }
-        };
-        let started = Instant::now();
-        let query = event.serialize().unwrap();
-        let resp = shared_http_client()
-            .post(url.clone())
-            .body(query)
-            .send()
-            .await?;
-        let status = resp.status();
-        resp.text().await?;
-        debug!(
-            elapsed_ms = started.elapsed().as_millis() as u64,
-            status = status.as_u16(),
-            url = %url,
-            "controller tel send_tel_event completed"
-        );
-
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use keri_core::{
-        actor::prelude::{HashFunctionCode, SerializationFormats},
-        event_message::{keri_version::KeriVersion, msg::KeriEvent, timestamped::Timestamped},
-        oobi::{LocationScheme, Scheme},
-        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-        signer::Signer,
-        transport::TransportError,
-    };
-    use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryRoute};
-
-    use super::{HTTPTelTransport, IdentifierTelTransport, SendingError};
-
-    fn tel_query() -> SignedTelQuery {
-        let signer = Signer::new();
-        let qry = KeriEvent::new(
-            KeriVersion::V1_0,
-            SerializationFormats::JSON,
-            HashFunctionCode::Blake3_256.into(),
-            Timestamped::new(TelQueryRoute::Tels {
-                reply_route: "".into(),
-                args: TelQueryArgs { i: None, ri: None },
-            }),
-        );
-        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(qry.encode().unwrap()).unwrap());
-        SignedTelQuery::new_nontrans(qry, BasicPrefix::Ed25519NT(signer.public_key()), sig)
-    }
-
-    #[async_std::test]
-    async fn a_tel_query_to_a_tcp_location_is_unsupported() {
-        let watcher = LocationScheme {
-            eid: IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key())),
-            scheme: Scheme::Tcp,
-            url: Some(url::Url::parse("tcp://127.0.0.1:5632/").unwrap()),
-        };
-
-        let result = HTTPTelTransport.send_query(tel_query(), watcher).await;
-
-        assert!(
-            matches!(
-                result,
-                Err(SendingError::TransportError(
-                    TransportError::UnsupportedScheme(Scheme::Tcp)
-                ))
-            ),
-            "expected UnsupportedScheme, got {result:?}"
-        );
     }
 }

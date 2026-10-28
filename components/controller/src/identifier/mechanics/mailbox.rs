@@ -14,7 +14,7 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     prefix::IdentifierPrefix,
 };
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::{error::ControllerError, identifier::Identifier, mailbox_updating::ActionRequired};
 
@@ -23,7 +23,7 @@ use super::{MechanicsError, ResponseProcessingError};
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub(crate) async fn mailbox_response(

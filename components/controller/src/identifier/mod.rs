@@ -14,10 +14,7 @@ use keri_core::{
     state::{IdentifierState, IdentifierStatus},
 };
 use mechanics::cache::IdentifierCache;
-use teliox::{
-    database::TelEventDatabase,
-    state::{vc_state::TelState, ManagerTelState},
-};
+use teliox::registry::RegistryStore;
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
 
@@ -27,16 +24,15 @@ pub mod mechanics;
 pub mod nontransferable;
 pub mod query;
 pub mod signing;
-pub mod tel;
+pub mod registry;
 
 pub struct Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + 'static,
-    T: TelEventDatabase + 'static,
+    T: RegistryStore + 'static,
     S: OobiStorageBackend,
 {
     id: IdentifierPrefix,
-    registry_id: Option<IdentifierPrefix>,
     pub known_events: Arc<KnownEvents<D, T, S>>,
     communication: Arc<Communication<D, T, S>>,
     pub to_notify: Vec<SignedEventMessage>,
@@ -51,12 +47,11 @@ where
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub fn new(
         id: IdentifierPrefix,
-        registry_id: Option<IdentifierPrefix>,
         known_events: Arc<KnownEvents<D, T, S>>,
         communication: Arc<Communication<D, T, S>>,
         db: Arc<IdentifierCache>,
@@ -91,7 +86,6 @@ where
             to_notify: events_to_notice,
             query_cache: db,
             cached_state: state,
-            registry_id,
             cached_identifiers: Mutex::new(HashMap::new()),
         }
     }
@@ -112,10 +106,6 @@ where
         &self.id
     }
 
-    pub fn registry_id(&self) -> Option<&IdentifierPrefix> {
-        self.registry_id.as_ref()
-    }
-
     /// Returns accepted IdentifierState of identifier.
     pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, MechanicsError> {
         self.known_events.get_state(id)
@@ -132,20 +122,6 @@ where
         self.known_events
             .get_state(&self.id)
             .is_ok_and(|state| state.is_abandoned())
-    }
-
-    pub fn find_management_tel_state(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Result<Option<ManagerTelState>, ControllerError> {
-        Ok(self.known_events.tel.get_management_tel_state(id)?)
-    }
-
-    pub fn find_vc_state(
-        &self,
-        vc_hash: &SelfAddressingIdentifier,
-    ) -> Result<Option<TelState>, ControllerError> {
-        Ok(self.known_events.tel.get_vc_state(vc_hash)?)
     }
 
     pub fn current_public_keys(&self) -> Result<Vec<BasicPrefix>, ControllerError> {

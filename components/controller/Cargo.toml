@@ -41,7 +41,7 @@ name = "test_kel_managing_postgres"
 required-features = ["storage-postgres"]
 
 [[test]]
-name = "test_tel_managing_postgres"
+name = "test_registries_postgres"
 required-features = ["storage-postgres"]
 
 [[test]]

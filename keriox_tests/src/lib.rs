@@ -12,10 +12,8 @@ use keri_core::{
     transport::test::TestTransport,
 };
 use said::{derivation::HashFunctionCode, sad::SerializationFormats};
-use transport::TelTestTransport;
 
 pub mod settings;
-pub mod transport;
 
 /// Waits before asking a watcher or witness again, as it may not have
 /// caught up yet. Panics after 30 attempts, so a peer that never answers
@@ -31,28 +29,16 @@ pub async fn setup_identifier(
     root_path: &Path,
     witness_locations: Vec<LocationScheme>,
     transport: Option<TestTransport<ActorError>>,
-    tel_transport: Option<TelTestTransport>,
 ) -> (RedbIdentifier, CryptoBox, Arc<RedbController>) {
     let verifier_controller = Arc::new(
-        match (transport, tel_transport) {
-            (None, None) => RedbController::new(ControllerConfig {
+        match transport {
+            None => RedbController::new(ControllerConfig {
                 db_path: root_path.to_owned(),
                 ..Default::default()
             }),
-            (None, Some(tel_transport)) => RedbController::new(ControllerConfig {
-                db_path: root_path.to_owned(),
-                tel_transport: Box::new(tel_transport.clone()),
-                ..Default::default()
-            }),
-            (Some(transport), None) => RedbController::new(ControllerConfig {
+            Some(transport) => RedbController::new(ControllerConfig {
                 db_path: root_path.to_owned(),
                 transport: Box::new(transport.clone()),
-                ..Default::default()
-            }),
-            (Some(transport), Some(tel_transport)) => RedbController::new(ControllerConfig {
-                db_path: root_path.to_owned(),
-                transport: Box::new(transport.clone()),
-                tel_transport: Box::new(tel_transport.clone()),
                 ..Default::default()
             }),
         }

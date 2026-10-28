@@ -43,9 +43,13 @@ async fn main() -> keri_sdk::Result<()> {
     // can't hijack the identity (the next key was committed in advance).
     alice.rotate().await?;
 
-    // Issue a revocable credential (the registry is created automatically).
-    let diploma = alice.issue(br#"{"d":"","degree":"MSc"}"#).await?;
-    assert!(keri.credential_status(&diploma.id).await?.is_valid());
+    // Issue a revocable credential (an ACDC with a registry of its own) and
+    // check what the holder will present.
+    let schema = "EOlgQaGgXI6Zqikg4I0KWaQeL9sRUGu7PUj78GekKnSf";
+    let diploma = alice
+        .issue(schema, keri_sdk::acdc::Block::new().with("degree", "MSc"))
+        .await?;
+    assert!(keri.verify_credential(&diploma.presentation)?.is_valid());
 
     Ok(())
 }
@@ -67,7 +71,7 @@ let verified = keri.verify(their_signed_message)?;
 | sign & verify | `Identity::sign`, `Keri::verify` |
 | rotate keys | `Identity::rotate` |
 | end an identity for good, then forget it | `Identity::abandon`, `Keri::remove_identity` |
-| issue / revoke credentials, check status | `Identity::issue`, `Identity::revoke`, `Keri::credential_status` |
+| issue / revoke credentials, verify a presented one | `Identity::issue`, `Identity::revoke`, `Keri::verify_credential` |
 | verify strangers | `Identity::oobi_url` / `Identity::kel` + `Keri::import_contact` |
 | device backup / recovery | `Identity::export`, `IdentityBuilder::restore_from` |
 | delegate (phone acts under your main identity) | `IdentityBuilder::delegated_by`, `Identity::pending_requests` |

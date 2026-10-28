@@ -194,29 +194,18 @@ impl Controller {
         Ok(())
     }
 
-    /// Parse and process a TEL event stream from raw bytes.
-    pub fn process_tel_stream(&self, stream: &[u8]) -> Result<()> {
-        dispatch!(self, i => i
-            .known_events
-            .tel
-            .parse_and_process_tel_stream(stream)
-            .map_err(|e| crate::advanced::Error::Other(e.to_string())))
-    }
-
-    /// Reconstruct an `Identifier` from a known prefix and optional registry.
+    /// Reconstruct an `Identifier` from a known prefix.
     ///
     /// Use this to load an identifier whose database already exists at the
     /// controller's `db_path`.
     pub fn load_identifier(
         &self,
         id: IdentifierPrefix,
-        registry_id: Option<IdentifierPrefix>,
     ) -> Identifier {
         match &self.inner {
             ControllerInner::Redb(c) => Identifier {
                 inner: IdentifierInner::Redb(keri_controller::controller::RedbIdentifier::new(
                     id,
-                    registry_id,
                     c.known_events.clone(),
                     c.communication.clone(),
                     c.cache.clone(),
@@ -227,7 +216,6 @@ impl Controller {
                 inner: IdentifierInner::Postgres(
                     keri_controller::controller::PostgresIdentifier::new(
                         id,
-                        registry_id,
                         c.known_events.clone(),
                         c.communication.clone(),
                         c.cache.clone(),

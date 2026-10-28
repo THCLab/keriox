@@ -58,13 +58,10 @@ pub enum Error {
     #[error("no witnesses configured for identifier: {0}")]
     NoWitnesses(IdentifierPrefix),
 
-    /// A credential registry has not been incepted for this identifier.
-    #[error("registry not incepted for identifier: {0}")]
-    RegistryNotIncepted(IdentifierPrefix),
-
-    /// The credential is not known in the local TEL.
-    #[error("credential not found in TEL: {0}")]
-    CredentialNotFound(SelfAddressingIdentifier),
+    /// A credential registry, or what a presentation carries of one, is
+    /// not well formed or cannot be kept.
+    #[error("credential registry: {0}")]
+    Registry(#[from] teliox::registry::RegistryError),
 
     /// Signature verification failed.
     #[error("verification failed: {0}")]

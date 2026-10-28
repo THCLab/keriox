@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use keri_core::database::postgres::oobi_storage::PostgresOobiStorage;
 use keri_core::database::postgres::PostgresDatabase;
-use teliox::database::postgres::PostgresTelDatabase;
+use teliox::registry::store::postgres::PostgresRegistryStore;
 
 use crate::identifier::mechanics::cache::IdentifierCache;
 use crate::{
@@ -13,9 +13,9 @@ use crate::{
 use super::Controller;
 
 pub type PostgresController =
-    Controller<PostgresDatabase, PostgresTelDatabase, PostgresOobiStorage>;
+    Controller<PostgresDatabase, PostgresRegistryStore, PostgresOobiStorage>;
 pub type PostgresIdentifier =
-    Identifier<PostgresDatabase, PostgresTelDatabase, PostgresOobiStorage>;
+    Identifier<PostgresDatabase, PostgresRegistryStore, PostgresOobiStorage>;
 
 impl PostgresController {
     pub async fn new_postgres(
@@ -27,7 +27,6 @@ impl PostgresController {
             initial_oobis,
             escrow_config,
             transport,
-            tel_transport,
             keri_version,
         } = config;
 
@@ -52,7 +51,6 @@ impl PostgresController {
         let comm = Arc::new(Communication {
             events: events.clone(),
             transport,
-            tel_transport,
         });
 
         let controller = Self {

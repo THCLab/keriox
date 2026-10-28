@@ -7,14 +7,11 @@ use keri_core::{
     transport::{default::DefaultTransport, Transport},
 };
 
-use crate::communication::{HTTPTelTransport, IdentifierTelTransport};
-
 pub struct ControllerConfig {
     pub db_path: PathBuf,
     pub initial_oobis: Vec<LocationScheme>,
     pub escrow_config: EscrowConfig,
     pub transport: Box<dyn Transport + Send + Sync>,
-    pub tel_transport: Box<dyn IdentifierTelTransport + Send + Sync>,
     /// The KERI version the controller writes its messages in; KERI 1.0
     /// until every node and client it talks to reads 2.0.
     pub keri_version: KeriVersion,
@@ -27,7 +24,6 @@ impl Default for ControllerConfig {
             initial_oobis: vec![],
             escrow_config: EscrowConfig::default(),
             transport: Box::new(DefaultTransport::new()),
-            tel_transport: Box::new(HTTPTelTransport),
             keri_version: KeriVersion::default(),
         }
     }

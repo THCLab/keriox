@@ -13,7 +13,7 @@ async fn test_witness_rotation(ctx: &mut InfrastructureContext) -> Result<(), Co
 
     // Setup identifier with `witness1` as witness
     let (mut identifier, mut controller_keypair, _) =
-        setup_identifier(root0.path(), vec![first_witness_oobi.clone()], None, None).await;
+        setup_identifier(root0.path(), vec![first_witness_oobi.clone()], None).await;
 
     let state = identifier.find_state(identifier.id())?;
     assert_eq!(state.sn, 0);

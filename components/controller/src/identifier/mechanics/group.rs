@@ -18,7 +18,7 @@ use keri_core::{
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 use said::SelfAddressingIdentifier;
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::identifier::Identifier;
 
@@ -27,7 +27,7 @@ use super::MechanicsError;
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     /// Init group identifier

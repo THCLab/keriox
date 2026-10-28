@@ -10,14 +10,14 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     processor::validator::{EventValidator, VerificationError},
 };
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::{error::ControllerError, known_events::KnownEvents};
 
 impl<D, T, S> KnownEvents<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), VerificationError> {

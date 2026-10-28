@@ -6,7 +6,7 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     prefix::IdentifierPrefix,
 };
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::{communication::SendingError, identifier::Identifier};
 
@@ -23,7 +23,7 @@ pub enum BroadcastingError {
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.

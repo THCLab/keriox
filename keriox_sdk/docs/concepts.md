@@ -65,12 +65,14 @@ The URL itself carries no secrets — the fetched history is self-verifying.
 
 ## Credential, registry (TEL)
 
-A credential here is any document whose digest the issuer anchors in their
-**registry** — a public issued/revoked switchboard (the spec calls it a
-Transaction Event Log). Verifiers check the registry to see whether the
-credential is still valid; revocation is one call by the issuer and visible
-to everyone. The SDK creates the registry automatically on first
-`identity.issue(...)`.
+A credential is an ACDC 2.0 document. Each one has its own **registry**
+(the spec calls it a Transaction Event Log): the history of its state,
+issued then perhaps revoked, which the issuer anchors in its key history.
+The state is blinded, so only the issuer and the holder can tell it. The
+holder shows a verifier a **presentation**, the credential with its
+registry, and the verifier checks it against the issuer's key history.
+Nothing is looked up on the network: a verifier learns of a revocation when
+it is presented with the revoked state.
 
 ## Delegation
 

@@ -14,9 +14,8 @@ pub use keri_core::prefix::{
 };
 pub use keri_core::signer::{CryptoBox, KeyManager};
 pub use keri_core::state::{Abandonment, IdentifierState, IdentifierStatus};
-pub use teliox::{
-    event::parse_tel_query_stream, state::vc_state::TelState, state::ManagerTelState,
-};
+/// ACDC 2.0 registries: the issuance and revocation state of credentials.
+pub use teliox::registry;
 
 #[cfg(feature = "storage-redb")]
 pub use controller::{RedbController, RedbIdentifier};

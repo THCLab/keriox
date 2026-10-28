@@ -607,19 +607,3 @@ pub struct VerifiedPayload {
     /// The identifier that produced the signature.
     pub signer_id: IdentifierPrefix,
 }
-
-// ── TEL credential status ─────────────────────────────────────────────────────
-
-/// The current lifecycle state of a credential in the TEL.
-///
-/// Returned by [`crate::advanced::tel::get_credential_status`] and
-/// [`crate::advanced::tel::check_credential_status`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CredentialStatus {
-    /// The credential has been issued and is currently valid.
-    Issued,
-    /// The credential has been revoked.
-    Revoked,
-    /// The TEL has not been queried yet, or the credential is not known locally.
-    Unknown,
-}

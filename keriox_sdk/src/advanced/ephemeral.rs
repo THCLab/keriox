@@ -3,7 +3,7 @@
 //! An [`EphemeralIdentifier`] is a throwaway, non-transferable identifier
 //! backed by a temporary database. It can sign witness queries without any
 //! pre-existing local state — useful for fetching another identifier's KEL,
-//! key state (KSN), or TEL from a witness before a full identifier exists
+//! or key state (KSN) from a witness before a full identifier exists
 //! locally (e.g. during import).
 //!
 //! The temporary database is removed when the value is dropped.
@@ -11,7 +11,7 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    communication::{Communication, HTTPTelTransport, SendingError},
+    communication::{Communication, SendingError},
     error::ControllerError,
     identifier::nontransferable::NontransferableIdentifier,
     known_events::RedbKnownEvents,
@@ -32,7 +32,7 @@ use crate::advanced::error::{Error, Result};
 
 type RedbNontransferableIdentifier = NontransferableIdentifier<
     keri_core::database::redb::RedbDatabase,
-    teliox::database::redb::RedbTelDatabase,
+    teliox::registry::store::redb::RedbRegistryStore,
     keri_core::oobi_manager::storage::RedbOobiStorage,
 >;
 
@@ -66,7 +66,6 @@ impl EphemeralIdentifier {
         let communication = Arc::new(Communication {
             events,
             transport: Box::new(DefaultTransport::new()),
-            tel_transport: Box::new(HTTPTelTransport),
         });
         let id = NontransferableIdentifier::new(public_key, communication);
         Ok(Self {
@@ -144,28 +143,6 @@ impl EphemeralIdentifier {
                 "unexpected response from witness: {other:?}"
             ))),
         }
-    }
-
-    /// Pull a registry's TEL (optionally narrowed to one credential) from a
-    /// witness and return the raw CESR response.
-    ///
-    /// # Errors
-    /// - [`Error::Controller`] / [`Error::Mechanics`] on network failures.
-    pub async fn pull_tel(
-        &self,
-        registry_id: &IdentifierPrefix,
-        vc_id: Option<IdentifierPrefix>,
-        witness: &LocationScheme,
-    ) -> Result<String> {
-        let qry = self.id.query_tel(registry_id.clone(), vc_id)?;
-        let signature = self.sign(
-            &qry.encode()
-                .map_err(|e| Error::EncodingError(e.to_string()))?,
-        )?;
-        Ok(self
-            .id
-            .finalize_query_tel(witness.clone(), qry, signature)
-            .await?)
     }
 }
 

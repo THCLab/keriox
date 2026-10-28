@@ -17,7 +17,7 @@ use keri_core::{
 };
 
 use keri_core::prefix::CesrPrimitive;
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::identifier::Identifier;
 
@@ -26,7 +26,7 @@ use super::MechanicsError;
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     /// Generate and return rotation event for Identifier

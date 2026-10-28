@@ -7,15 +7,13 @@ use keri_core::{
     event::sections::seal::{EventSeal, Seal},
     event::KeyEvent,
     event_message::{
-        msg::TypedEvent, signature::Signature, signed_event_message::Notice, EventTypeTag,
+        signature::Signature, signed_event_message::Notice,
     },
     query::{mailbox::MailboxQuery, query_event::QueryEvent},
     state::{IdentifierState, IdentifierStatus},
 };
-use teliox::{
-    query::TelQueryEvent,
-    state::{vc_state::TelState, ManagerTelState},
-};
+use keri_core::event_message::msg::KeriEvent;
+use teliox::registry::{AcdcBinding, Blinding, Disclosure, Pending, Policy, Verdict};
 
 use crate::advanced::error::Result;
 use crate::advanced::types::VerificationIssue;
@@ -117,12 +115,6 @@ impl Identifier {
     pub fn keri_version(&self) -> keri_core::event_message::keri_version::KeriVersion {
         dispatch!(self, i => {
         i.known_events.version
-    })
-    }
-
-    pub fn registry_id(&self) -> Option<&IdentifierPrefix> {
-        dispatch!(self, i => {
-        i.registry_id()
     })
     }
 
@@ -585,102 +577,90 @@ impl Identifier {
         Ok(sender_id)
     }
 
-    // ── TEL / Credential ────────────────────────────────────────────────────
+    // ── Credential registries ───────────────────────────────────────────────
 
-    /// Generate a `vcp` inception event and anchor `ixn`.
-    pub fn incept_registry(
-        &mut self,
-    ) -> Result<(IdentifierPrefix, TypedEvent<EventTypeTag, KeyEvent>)> {
-        dispatch_mut!(self, i => {
+    /// A new registry for a credential still to be built naming it.
+    pub fn incept_registry(&self) -> Result<Pending> {
+        dispatch!(self, i => {
         Ok(i.incept_registry()?)
     })
     }
 
-    /// Finalise registry inception (sign + save the anchor ixn).
-    pub async fn finalize_incept_registry(
+    /// Issue `acdc` as the first update of the registry `inception` starts.
+    /// Returns the registry events and the `ixn` anchoring both.
+    pub fn issue_in(
+        &self,
+        inception: Pending,
+        blinding: &Blinding,
+        acdc: &SelfAddressingIdentifier,
+    ) -> Result<(Vec<Pending>, KeriEvent<KeyEvent>)> {
+        dispatch!(self, i => {
+        Ok(i.issue_in(inception, blinding, acdc)?)
+    })
+    }
+
+    /// The next update of `registry`, giving `acdc` the `state`, and the
+    /// `ixn` anchoring it.
+    pub fn update_registry(
+        &self,
+        registry: &SelfAddressingIdentifier,
+        blinding: &Blinding,
+        acdc: &SelfAddressingIdentifier,
+        state: &str,
+    ) -> Result<(Vec<Pending>, KeriEvent<KeyEvent>)> {
+        dispatch!(self, i => {
+        Ok(i.update_registry(registry, blinding, acdc, state)?)
+    })
+    }
+
+    /// Publish the signed `ixn` anchoring `pending`, then keep `pending`.
+    pub async fn finalize_registry_events(
         &mut self,
-        event: &[u8],
+        pending: &[Pending],
+        ixn: &[u8],
         sig: SelfSigningPrefix,
     ) -> Result<()> {
         dispatch_mut!(self, i => {
-        Ok(i.finalize_incept_registry(event, sig).await?)
+        Ok(i.finalize_registry_events(pending, ixn, sig).await?)
     })
     }
 
-    /// Send TEL events to backers (witnesses).
-    pub async fn notify_backers(&self) -> Result<()> {
+    /// Keep registry events whose anchoring `ixn` a group finalized.
+    pub fn commit_registry_events(&self, pending: &[Pending]) -> Result<()> {
         dispatch!(self, i => {
-        Ok(i.notify_backers().await?)
+        Ok(i.commit_registry_events(pending)?)
     })
     }
 
-    /// Generate `iss` event + anchor `ixn`. Returns (vc_id, ixn_event).
-    pub fn issue(
+    /// What a holder presents of a registry this identifier runs.
+    pub fn registry_disclosure(&self, registry: &SelfAddressingIdentifier) -> Result<Disclosure> {
+        dispatch!(self, i => {
+        Ok(i.registry_disclosure(registry)?)
+    })
+    }
+
+    /// Judge a disclosed registry, and keep it if it is valid.
+    pub fn accept_disclosure(
         &self,
-        credential_digest: SelfAddressingIdentifier,
-    ) -> Result<(IdentifierPrefix, TypedEvent<EventTypeTag, KeyEvent>)> {
+        disclosure: &Disclosure,
+        acdc: Option<&AcdcBinding>,
+        policy: &Policy,
+    ) -> Result<Verdict> {
         dispatch!(self, i => {
-        Ok(i.issue(credential_digest)?)
+        Ok(i.accept_disclosure(disclosure, acdc, policy)?)
     })
     }
 
-    /// Generate `rev` event + anchor `ixn` (encoded). Returns encoded ixn bytes.
-    pub fn revoke(&self, credential_sai: &SelfAddressingIdentifier) -> Result<Vec<u8>> {
-        dispatch!(self, i => {
-        Ok(i.revoke(credential_sai)?)
-    })
-    }
-
-    /// Finalise a credential issuance (sign + save the anchor `ixn`).
-    pub async fn finalize_issue(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
-        dispatch_mut!(self, i => {
-        Ok(i.finalize_issue(event, sig).await?)
-    })
-    }
-
-    /// Finalise a credential revocation (sign + save the anchor `ixn`).
-    pub async fn finalize_revoke(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
-        dispatch_mut!(self, i => {
-        Ok(i.finalize_revoke(event, sig).await?)
-    })
-    }
-
-    /// Build a TEL query event.
-    pub fn query_tel(
+    /// Judge a registry accepted before, against the issuer's KEL as known
+    /// now.
+    pub fn registry_verdict(
         &self,
-        registry_id: IdentifierPrefix,
-        vc_identifier: IdentifierPrefix,
-    ) -> Result<TelQueryEvent> {
+        registry: &SelfAddressingIdentifier,
+        acdc: Option<&AcdcBinding>,
+        policy: &Policy,
+    ) -> Result<Verdict> {
         dispatch!(self, i => {
-        Ok(i.query_tel(registry_id, vc_identifier)?)
-    })
-    }
-
-    /// Sign + send TEL query, process the response.
-    pub async fn finalize_query_tel(
-        &self,
-        qry: TelQueryEvent,
-        sig: SelfSigningPrefix,
-    ) -> Result<()> {
-        dispatch!(self, i => {
-        Ok(i.finalize_query_tel(qry, sig).await?)
-    })
-    }
-
-    /// Look up a VC's current `TelState` in the local TEL.
-    pub fn find_vc_state(&self, vc_hash: &SelfAddressingIdentifier) -> Result<Option<TelState>> {
-        dispatch!(self, i => {
-        Ok(i.find_vc_state(vc_hash)?)
-    })
-    }
-
-    /// Look up a registry's management TEL state.
-    pub fn find_management_tel_state(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Result<Option<ManagerTelState>> {
-        dispatch!(self, i => {
-        Ok(i.find_management_tel_state(id)?)
+        Ok(i.registry_verdict(registry, acdc, policy)?)
     })
     }
 

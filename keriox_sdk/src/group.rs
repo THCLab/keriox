@@ -14,7 +14,7 @@ use keri_controller::IdentifierPrefix;
 use keri_core::prefix::CesrPrimitive;
 
 use crate::error::{Error, Result};
-use crate::ids::{CredentialId, IdentityId};
+use crate::ids::IdentityId;
 use crate::keri::KeriInner;
 use crate::message::SignedMessage;
 
@@ -242,42 +242,36 @@ impl Group {
         })
     }
 
-    /// Issue a credential from the group's registry (created automatically
-    /// on first use). With a signing threshold above 1, the other members
-    /// must co-sign: they see it in [`crate::Identity::pending_requests`] and accept.
-    pub async fn issue(&self, payload: &[u8]) -> Result<crate::credential::Credential> {
+    /// Issue a credential from the group: an ACDC of the schema with SAID
+    /// `schema` and the given attributes, in a private registry of its own
+    /// that this member keeps. With a signing threshold above 1, the other
+    /// members must co-sign the anchoring event: they see it in
+    /// [`crate::Identity::pending_requests`] and accept.
+    pub async fn issue(
+        &self,
+        schema: &str,
+        attributes: acdc::Block,
+    ) -> Result<crate::credential::Credential> {
         let signer = self.keri.store.load_signer(&self.member_alias)?;
         let member_id = self.keri.store.load(&self.member_alias)?.id().clone();
+        let blinding = teliox::registry::Blinding::private();
+        let issuer = self.group_id.to_string();
 
-        let registry = match self.registry_id()? {
-            Some(r) => r,
-            None => {
-                let mut group = self.group_identifier()?;
-                let (registry, _digest) = crate::advanced::operations::incept_group_registry(
-                    &mut group, &member_id, &signer,
-                )
-                .await?;
-                self.keri.store.save_registry(&self.group_alias, &registry)?;
-                // Publish the anchoring event and collect witness receipts
-                // so the registry becomes fully accepted.
-                group.notify_witnesses().await.map_err(crate::advanced::Error::from)?;
-                self.sync().await?;
-                registry
-            }
-        };
-
-        let (payload, said) = crate::identity::prepare_credential_payload(payload)?;
         let mut group = self.group_identifier()?;
-        crate::advanced::operations::issue_group(&mut group, &member_id, &signer, said.clone())
-            .await?;
-        group.notify_witnesses().await.map_err(crate::advanced::Error::from)?;
+        let (presentation, _digest) = crate::advanced::registry::issue_group(
+            &mut group,
+            &member_id,
+            &signer,
+            &blinding,
+            |registry| crate::identity::build_acdc(&issuer, schema, registry, attributes),
+        )
+        .await?;
+        group
+            .notify_witnesses()
+            .await
+            .map_err(crate::advanced::Error::from)?;
         self.sync().await?;
-
-        Ok(crate::credential::Credential {
-            id: CredentialId::new(registry, said),
-            payload,
-            issuer: self.id(),
-        })
+        crate::identity::credential(&self.keri, &self.group_alias, self.id(), presentation, &blinding)
     }
 
     /// Rotate the group's keys (initiator side).
@@ -424,14 +418,7 @@ impl Group {
     /// The group-bound identifier handle (escape hatch + internal use).
     fn group_identifier(&self) -> Result<crate::advanced::Identifier> {
         let controller = self.keri.store.controller_for(&self.member_alias)?;
-        Ok(controller.load_identifier(self.group_id.clone(), self.registry_id()?))
-    }
-
-    fn registry_id(&self) -> Result<Option<IdentifierPrefix>> {
-        let Some(content) = self.keri.store.read_meta(&self.group_alias, "reg_id")? else {
-            return Ok(None);
-        };
-        Ok(content.trim().parse().ok())
+        Ok(controller.load_identifier(self.group_id.clone()))
     }
 }
 

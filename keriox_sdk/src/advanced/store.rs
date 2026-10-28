@@ -255,13 +255,8 @@ impl KeriStore {
             Error::IdentifierNotFound(IdentifierPrefix::SelfAddressing(Default::default()))
         })?;
 
-        let reg_id = self
-            .read_file(alias, "reg_id")
-            .ok()
-            .and_then(|s| IdentifierPrefix::from_str(s.trim()).ok());
-
         let controller = self.get_or_create_controller(db_path)?;
-        Ok(controller.load_identifier(id_prefix, reg_id))
+        Ok(controller.load_identifier(id_prefix))
     }
 
     /// Load the current signing key for an alias.
@@ -605,13 +600,59 @@ impl KeriStore {
         self.write_file(alias, "next_priv_key", &next.to_str())
     }
 
-    /// Persist a registry identifier after [`crate::advanced::operations::incept_registry`].
+    /// Persist a credential this alias issued, and the blinding of its
+    /// registry. The ACDC is kept with the alias's metadata, the blinding
+    /// with its secrets: whoever holds it can unblind the registry's state.
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
-    pub fn save_registry(&self, alias: &str, registry_id: &IdentifierPrefix) -> Result<()> {
-        use keri_core::prefix::CesrPrimitive;
-        self.write_file(alias, "reg_id", &registry_id.to_str())
+    pub fn save_credential(
+        &self,
+        alias: &str,
+        acdc: &acdc::Acdc,
+        blinding: &teliox::registry::Blinding,
+    ) -> Result<()> {
+        let acdc_text = std::str::from_utf8(acdc.raw())
+            .map_err(|_| Error::PersistenceError("a credential is kept as text".into()))?;
+        self.meta
+            .set(alias, &format!("credential_{}", acdc.said()), acdc_text)?;
+        let salt = match blinding {
+            teliox::registry::Blinding::Private(salt) => salt.to_qb64(),
+            teliox::registry::Blinding::Public => String::new(),
+        };
+        self.secrets
+            .store(alias, &format!("blinding_{}", acdc.said()), &salt)
+    }
+
+    /// A credential this alias issued and the blinding of its registry.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] when it is not kept or cannot be read.
+    pub fn load_credential(
+        &self,
+        alias: &str,
+        said: &str,
+    ) -> Result<(acdc::Acdc, teliox::registry::Blinding)> {
+        let missing = || Error::PersistenceError(format!("no credential {said} for {alias}"));
+        let text = self
+            .meta
+            .get(alias, &format!("credential_{said}"))?
+            .ok_or_else(missing)?;
+        let acdc = acdc::Acdc::parse(text.as_bytes())
+            .map_err(|e| Error::PersistenceError(format!("stored credential {said}: {e}")))?;
+        let salt = self
+            .secrets
+            .load(alias, &format!("blinding_{said}"))?
+            .ok_or_else(missing)?;
+        let blinding = if salt.is_empty() {
+            teliox::registry::Blinding::Public
+        } else {
+            teliox::registry::Blinding::Private(
+                teliox::registry::Salt::from_qb64(&salt)
+                    .map_err(|e| Error::PersistenceError(e.to_string()))?,
+            )
+        };
+        Ok((acdc, blinding))
     }
 
     /// Persist the identifier prefix for an alias.

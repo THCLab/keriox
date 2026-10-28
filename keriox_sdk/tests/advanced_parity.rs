@@ -9,11 +9,10 @@
 use keri_sdk::advanced::{
     // Compound operations dkms-bin drives directly.
     operations::{
-        accept_multisig_event, create_multisig, incept_group_registry, incept_registry, issue,
-        issue_group, poll_group_requests, poll_pending_requests, revoke,
+        accept_multisig_event, create_multisig, poll_group_requests, poll_pending_requests,
     },
-    // TEL queries.
-    tel::{check_credential_status, get_credential_status, query_tel},
+    // Credentials and their registries.
+    registry::{issue, issue_group, presentation, revoke, update, verify},
     // Signing / SAID helpers.
     signing::{compute_said, parse_signed_envelope, saidify_json},
     // Key generation.
@@ -46,7 +45,7 @@ use keri_sdk::advanced::{
     SignatureThreshold,
     Signer,
     StoreRotationConfig,
-    TelState,
+    Verdict,
     WatcherResponseError,
 };
 
@@ -66,8 +65,12 @@ fn identifier_methods_used_by_dkms_resolve() {
     let _ = Identifier::find_state;
     let _ = Identifier::get_last_event_seal;
     let _ = Identifier::witnesses;
-    let _ = Identifier::registry_id;
-    let _ = Identifier::find_vc_state;
+    let _ = Identifier::incept_registry;
+    let _ = Identifier::issue_in;
+    let _ = Identifier::update_registry;
+    let _ = Identifier::registry_disclosure;
+    let _ = Identifier::accept_disclosure;
+    let _ = Identifier::registry_verdict;
     let _ = Identifier::sign_to_cesr;
     let _ = Identifier::verify_from_cesr_detailed;
 
@@ -76,7 +79,8 @@ fn identifier_methods_used_by_dkms_resolve() {
     let _ = KeriStore::load;
     let _ = KeriStore::load_signer;
     let _ = KeriStore::rotate_with;
-    let _ = KeriStore::save_registry;
+    let _ = KeriStore::save_credential;
+    let _ = KeriStore::load_credential;
     let _ = KeriStore::list_aliases;
 
     // Threshold variants used by dkms-bin config parsing.

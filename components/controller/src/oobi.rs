@@ -5,14 +5,14 @@ use keri_core::{
     prefix::IdentifierPrefix,
     query::reply_event::ReplyRoute,
 };
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::{error::ControllerError, identifier::Identifier, known_events::OobiRetrieveError};
 
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub fn get_location(

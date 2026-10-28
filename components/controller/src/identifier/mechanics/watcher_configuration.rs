@@ -7,7 +7,7 @@ use keri_core::{
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::reply_event::{ReplyEvent, ReplyRoute},
 };
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::identifier::Identifier;
 
@@ -16,7 +16,7 @@ use super::MechanicsError;
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     /// Generates reply event with `end_role_add` route.

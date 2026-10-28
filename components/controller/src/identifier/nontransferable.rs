@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use keri_core::event_message::keri_version::KeriVersion;
 
 use crate::{
     communication::Communication, error::ControllerError, BasicPrefix, IdentifierPrefix,
@@ -13,25 +12,17 @@ use keri_core::{
     },
     prefix::CesrPrimitive,
     database::{EscrowCreator, EventDatabase},
-    event_message::{
-        msg::KeriEvent,
-        signature::{Nontransferable, Signature},
-        timestamped::Timestamped,
-    },
+    event_message::signature::{Nontransferable, Signature},
     oobi_manager::storage::OobiStorageBackend,
     query::query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
 };
-use teliox::{
-    database::TelEventDatabase,
-    query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute},
-};
+use teliox::registry::RegistryStore;
 
-use super::mechanics::MechanicsError;
 
 pub struct NontransferableIdentifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + 'static,
-    T: TelEventDatabase + 'static,
+    T: RegistryStore + 'static,
     S: OobiStorageBackend,
 {
     id: BasicPrefix,
@@ -41,7 +32,7 @@ where
 impl<D, T, S> NontransferableIdentifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub fn new(public_key: BasicPrefix, communication: Arc<Communication<D, T, S>>) -> Self {
@@ -130,45 +121,5 @@ where
             .communication
             .send_query_to(&witness.eid, signed_qry)
             .await?)
-    }
-
-    pub fn query_tel(
-        &self,
-        registry_id: IdentifierPrefix,
-        vc_identifier: Option<IdentifierPrefix>,
-    ) -> Result<TelQueryEvent, ControllerError> {
-        let route = TelQueryRoute::Tels {
-            reply_route: "".into(),
-            args: TelQueryArgs {
-                i: vc_identifier,
-                ri: Some(registry_id),
-            },
-        };
-        let env = Timestamped::new(route);
-        Ok(KeriEvent::new(
-            KeriVersion::V1_0,
-            SerializationFormats::JSON,
-            HashFunctionCode::Blake3_256.into(),
-            env,
-        ))
-    }
-
-    pub async fn finalize_query_tel(
-        &self,
-        witness_location: LocationScheme,
-        qry: TelQueryEvent,
-        sig: Signature,
-    ) -> Result<String, MechanicsError> {
-        let signed_qry = SignedTelQuery {
-            query: qry,
-            signature: sig,
-        };
-
-        let tel_res = self
-            .communication
-            .send_tel_query(signed_qry, witness_location)
-            .await
-            .map_err(|e| MechanicsError::OtherError(e.to_string()))?;
-        Ok(tel_res)
     }
 }

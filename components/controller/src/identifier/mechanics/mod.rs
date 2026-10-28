@@ -12,7 +12,6 @@ pub mod kel_managing;
 mod mailbox;
 pub mod notify_witness;
 pub mod query_mailbox;
-pub mod tel_managing;
 pub mod watcher_configuration;
 
 #[derive(Debug, thiserror::Error)]

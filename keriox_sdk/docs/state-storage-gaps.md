@@ -23,6 +23,7 @@ SDK's to store**. The storage design must hold with zero key bytes on disk.
 |---|---|---|---|
 | `<alias>/priv_key` | current signing seed, **plaintext** | *file does not exist* — the provider holds the key | software-key fallback writes plaintext seeds to disk; no pluggable secrets backend |
 | `<alias>/next_priv_key` | pre-rotation seed, **plaintext** | *does not exist* | same |
+| `<alias>/blinding_<said>` | the blinding salt of an issued credential's registry | kept the same way | whoever reads it can unblind the registry's state; not part of `IdentityBackup` |
 
 `IdentityBackup` (export/restore) also carries both seeds in serialized
 form; HSM-backed identities already refuse export.
@@ -41,13 +42,13 @@ in use, Category A is empty — no key bytes are stored at all.
 | File | Contents | Written by |
 |---|---|---|
 | `<alias>/id` | identifier prefix (CESR text) | create / restore / delegation finalize |
-| `<alias>/reg_id` | TEL registry id | first credential issuance |
 | `<alias>/delegated_id` | delegated AID awaiting approval | delegation request |
 | `<alias>/delegator_id` | delegator AID | delegation request |
 | `<alias>/group_id` | group AID | group create / join |
 | `<alias>/member_alias` | back-reference to the member alias | group create / join |
 | `<alias>/participants` | member AIDs, JSON, **in inception key order** | group create / rotate |
 | `<alias>/credentials` | issued credential ids, line-per-entry | facade issuance |
+| `<alias>/credential_<said>` | an issued credential (ACDC JSON) | facade issuance |
 | `.contacts/<aid>/id` | contact's AID | contact import |
 | `.contacts/<aid>/source` | witness base URL for refresh | contact import |
 

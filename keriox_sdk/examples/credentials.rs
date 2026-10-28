@@ -1,9 +1,9 @@
-//! Issue a revocable credential, check its status, revoke it.
+//! Issue a revocable credential, verify what the holder presents, revoke it.
 //!
 //! Run:  cargo run -p keri-sdk --example credentials
 //! (set WITNESS_URL=http://... to run against a real witness)
 
-use keri_sdk::Keri;
+use keri_sdk::{acdc::Block, Keri};
 
 #[tokio::main]
 async fn main() -> keri_sdk::Result<()> {
@@ -16,25 +16,33 @@ async fn main() -> keri_sdk::Result<()> {
     }
     let issuer = builder.build().await?;
 
-    // First issuance creates the public registry automatically. A JSON
-    // payload with a `d` field gets the credential's digest embedded.
+    // A credential is an ACDC of some schema, here named by its SAID, with
+    // a registry of its own that records its state.
+    let schema = "EOlgQaGgXI6Zqikg4I0KWaQeL9sRUGu7PUj78GekKnSf";
     let diploma = issuer
-        .issue(br#"{"d":"","degree":"MSc Cryptography","holder":"bob"}"#)
+        .issue(schema, Block::new().with("degree", "MSc Cryptography"))
         .await?;
     println!("issued credential: {}", diploma.id);
-    println!("payload with embedded digest: {}", diploma.payload_str().unwrap());
 
-    // Anyone holding the credential id (a plain string) can check it.
-    let status = keri.credential_status(&diploma.id).await?;
+    // The holder gets the presentation and shows it to verifiers, who check
+    // it against the issuer's key history.
+    let status = keri.verify_credential(&diploma.presentation)?;
     println!("status: {status:?} (valid: {})", status.is_valid());
 
-    // Revocation is one call by the issuer, visible to every checker.
-    issuer.revoke(&diploma.id).await?;
-    let status = keri.credential_status(&diploma.id).await?;
-    println!("after revocation: {status:?} (valid: {})", status.is_valid());
+    // Revoking gives the revoked presentation: verifiers see the revocation
+    // once it is presented to them.
+    let revoked = issuer.revoke(&diploma.id).await?;
+    let status = keri.verify_credential(&revoked)?;
+    println!(
+        "after revocation: {status:?} (valid: {})",
+        status.is_valid()
+    );
 
-    // The issuer's index remembers everything it issued.
-    let issued: Vec<String> = issuer.credentials()?.iter().map(|c| c.to_string()).collect();
+    let issued: Vec<String> = issuer
+        .credentials()?
+        .iter()
+        .map(|c| c.to_string())
+        .collect();
     println!("issued so far: {issued:?}");
     Ok(())
 }

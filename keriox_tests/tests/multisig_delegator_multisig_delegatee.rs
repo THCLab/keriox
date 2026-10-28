@@ -17,14 +17,14 @@ async fn multi_delegator_multi_delegatee(
     // Setup identifier for first group participant.
     let root_0 = Builder::new().prefix("test-db1").tempdir().unwrap();
     let (mut delegator_identifier1, delegator_km1, controller1) =
-        setup_identifier(root_0.path(), vec![witness_oobi.clone()], None, None).await;
+        setup_identifier(root_0.path(), vec![witness_oobi.clone()], None).await;
 
     assert!(delegator_identifier1.get_own_kel().is_some());
 
     // Setup identifier for second group participant.
     let root_1 = Builder::new().prefix("test-db2").tempdir().unwrap();
     let (mut delegator_identifier2, delegator_km2, controller2) =
-        setup_identifier(root_1.path(), vec![witness_oobi.clone()], None, None).await;
+        setup_identifier(root_1.path(), vec![witness_oobi.clone()], None).await;
 
     assert!(delegator_identifier2.get_own_kel().is_some());
 
@@ -172,7 +172,6 @@ async fn multi_delegator_multi_delegatee(
         delegatee_root_0.path(),
         vec![witness_oobi.clone()],
         None,
-        None,
     )
     .await;
 
@@ -183,7 +182,6 @@ async fn multi_delegator_multi_delegatee(
     let (mut delegatee_identifier2, delegatee_km2, _delegatee_controller2) = setup_identifier(
         delegatee_root_1.path(),
         vec![witness_oobi.clone()],
-        None,
         None,
     )
     .await;

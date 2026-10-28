@@ -8,7 +8,7 @@ use crate::advanced::types::VerificationIssue;
 use crate::credential::CredentialStatus;
 use crate::error::{Error, Result};
 use crate::identity::{Identity, IdentityBuilder, Keys};
-use crate::ids::{CredentialId, IdentityId};
+use crate::ids::IdentityId;
 use crate::message::{signer_of, Verified};
 use crate::retry::RetryPolicy;
 
@@ -519,65 +519,42 @@ impl Keri {
         Ok(IdentityId::from(aid.clone()))
     }
 
-    /// Check whether a credential is currently valid, revoked, or unknown.
+    /// Judge a presented credential (a [`crate::Credential::presentation`])
+    /// under the default policy: credentials of an issuer that later
+    /// abandoned its identity stay valid.
     ///
-    /// Checks registries already known locally first; if the credential is
-    /// not found there, queries the network (with retries) through this
-    /// store's identities. Returns [`CredentialStatus::Unknown`] when no
-    /// registry anywhere knows the credential — for a foreign credential
-    /// that usually means the issuer has not been imported yet
-    /// ([`Keri::import_contact`]).
-    pub async fn credential_status(&self, id: &CredentialId) -> Result<CredentialStatus> {
+    /// The issuer's key history must be known to one of this store's
+    /// identities or contacts ([`Keri::import_contact`]); until it holds
+    /// the events anchoring the registry, the status is
+    /// [`CredentialStatus::Indeterminate`]. The state is the state
+    /// presented: a revocation is seen only once it is presented.
+    pub fn verify_credential(&self, presentation: &[u8]) -> Result<CredentialStatus> {
+        self.verify_credential_with(presentation, &teliox::registry::Policy::default())
+    }
+
+    /// Like [`Keri::verify_credential`], under `policy`.
+    pub fn verify_credential_with(
+        &self,
+        presentation: &[u8],
+        policy: &teliox::registry::Policy,
+    ) -> Result<CredentialStatus> {
+        let presentation = teliox::registry::Presentation::parse(presentation)
+            .map_err(crate::advanced::Error::from)?;
         let mut candidates = self.identities()?;
         candidates.extend(self.contact_aliases());
-
-        // Local pass: no network.
+        let mut status = CredentialStatus::Indeterminate(
+            "the issuer's key history is not known here".into(),
+        );
         for alias in &candidates {
             let Ok(identifier) = self.inner.store.load(alias) else {
                 continue;
             };
-            if let Ok(status) =
-                crate::advanced::tel::get_credential_status(&identifier, id.said())
-            {
-                let status: CredentialStatus = status.into();
-                if status != CredentialStatus::Unknown {
-                    return Ok(status);
-                }
+            status = crate::advanced::registry::verify(&identifier, &presentation, policy)?.into();
+            if !matches!(status, CredentialStatus::Indeterminate(_)) {
+                break;
             }
         }
-
-        // Network pass: refresh the registry state through any identity
-        // that can sign queries.
-        for alias in &self.identities()? {
-            let Ok(identifier) = self.inner.store.load(alias) else {
-                continue;
-            };
-            let Ok(signer) = self.inner.store.load_signer(alias) else {
-                continue;
-            };
-            let refreshed = crate::retry::with_retry(&self.inner.retry, || {
-                let signer = signer.clone();
-                let identifier = &identifier;
-                async move {
-                    Ok(crate::advanced::tel::check_credential_status(
-                        identifier,
-                        &signer,
-                        id.registry_prefix(),
-                        id.said(),
-                    )
-                    .await?)
-                }
-            })
-            .await;
-            if let Ok(status) = refreshed {
-                let status: CredentialStatus = status.into();
-                if status != CredentialStatus::Unknown {
-                    return Ok(status);
-                }
-            }
-        }
-
-        Ok(CredentialStatus::Unknown)
+        Ok(status)
     }
 
     /// Load a group identity this store participates in (created earlier

@@ -260,7 +260,6 @@ async fn a_keri_1_identifier_rotates_in_keri_2(
     })?);
     let mut id = Identifier::new(
         prefix,
-        None,
         controller.known_events.clone(),
         controller.communication.clone(),
         controller.cache.clone(),

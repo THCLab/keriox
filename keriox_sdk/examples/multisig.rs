@@ -46,8 +46,11 @@ async fn main() -> keri_sdk::Result<()> {
     assert_eq!(alice_keri.verify(signed.as_cesr())?.signer, team.id());
 
     // The group can also issue credentials from its own registry.
-    let cred = team.issue(br#"{"d":"","statement":"team-approved"}"#).await?;
+    let schema = "EOlgQaGgXI6Zqikg4I0KWaQeL9sRUGu7PUj78GekKnSf";
+    let cred = team
+        .issue(schema, keri_sdk::acdc::Block::new().with("statement", "team-approved"))
+        .await?;
     println!("group credential {} valid: {}", cred.id,
-        alice_keri.credential_status(&cred.id).await?.is_valid());
+        alice_keri.verify_credential(&cred.presentation)?.is_valid());
     Ok(())
 }

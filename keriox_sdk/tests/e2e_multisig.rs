@@ -108,13 +108,15 @@ async fn group_lifecycle_any_member_may_sign(infra: &mut TestInfra) {
 
     // ── The group issues a credential ─────────────────────────────────────
     let cred = team_alice
-        .issue(br#"{"d":"","statement":"team-approved"}"#)
+        .issue(
+            "EOlgQaGgXI6Zqikg4I0KWaQeL9sRUGu7PUj78GekKnSf",
+            keri_sdk::acdc::Block::new().with("statement", "team-approved"),
+        )
         .await
         .expect("group credential");
     assert_eq!(cred.issuer, group_id);
     assert!(alice_keri
-        .credential_status(&cred.id)
-        .await
+        .verify_credential(&cred.presentation)
         .unwrap()
         .is_valid());
 

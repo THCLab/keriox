@@ -17,7 +17,7 @@ use keri_core::{
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::query_event::{LogsQueryArgs, QueryEvent, QueryRoute},
 };
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use super::Identifier;
 
@@ -44,7 +44,7 @@ pub enum WatcherResponseError {
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub fn query_watchers(

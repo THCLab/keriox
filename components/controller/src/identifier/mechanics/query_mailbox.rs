@@ -10,7 +10,7 @@ use keri_core::{
         query_event::SignedQuery,
     },
 };
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::{
     communication::SendingError, error::ControllerError, identifier::Identifier,
@@ -34,7 +34,7 @@ pub enum ResponseProcessingError {
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     /// Generates query message of route `mbx` to query own identifier mailbox.

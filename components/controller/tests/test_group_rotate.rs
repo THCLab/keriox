@@ -11,7 +11,7 @@ use tempfile::Builder;
 
 type TestController = Controller<
     keri_core::database::redb::RedbDatabase,
-    teliox::database::redb::RedbTelDatabase,
+    teliox::registry::store::redb::RedbRegistryStore,
     keri_core::oobi_manager::storage::RedbOobiStorage,
 >;
 

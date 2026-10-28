@@ -57,9 +57,9 @@ pub use keri_core::actor::{QueryError, SignedQueryError};
 pub use keri_core::database::redb::RedbDatabase;
 pub use keri_core::oobi_manager::storage::RedbOobiStorage;
 
-// ── TEL ─────────────────────────────────────────────────────────────────────
+// ── Registries ──────────────────────────────────────────────────────────────
 
-pub use teliox::database::redb::RedbTelDatabase;
+pub use teliox::registry::store::redb::RedbRegistryStore;
 
 // ── SAID ────────────────────────────────────────────────────────────────────
 

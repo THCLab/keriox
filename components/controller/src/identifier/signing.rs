@@ -8,7 +8,7 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
-use teliox::database::TelEventDatabase;
+use teliox::registry::RegistryStore;
 
 use crate::error::ControllerError;
 
@@ -17,7 +17,7 @@ use super::Identifier;
 impl<D, T, S> Identifier<D, T, S>
 where
     D: EventDatabase + EscrowCreator + Send + Sync + 'static,
-    T: TelEventDatabase + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
     pub fn sign_with_index(

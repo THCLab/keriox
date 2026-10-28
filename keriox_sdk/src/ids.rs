@@ -79,9 +79,7 @@ impl<'de> serde::Deserialize<'de> for IdentityId {
 
 /// The globally unique identifier of an issued credential.
 ///
-/// Self-contained: it carries both the issuer's registry and the credential
-/// digest, so [`crate::Keri::credential_status`] can check any credential —
-/// including one issued by somebody else — from the id string alone.
+/// It carries both the credential's registry and the credential's SAID.
 ///
 /// Renders as `"<registry>:<credential digest>"`.
 ///

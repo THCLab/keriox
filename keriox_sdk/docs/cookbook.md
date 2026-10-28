@@ -40,12 +40,14 @@ cover.
 
 | I want to… | Call |
 |---|---|
-| issue a revocable credential | `identity.issue(payload).await` (registry auto-created) |
-| check whether one is still valid | `keri.credential_status(&id).await?.is_valid()` |
-| revoke one I issued | `identity.revoke(&id).await` |
+| issue a revocable credential | `identity.issue(schema, attributes).await` (its registry is created with it) |
+| hand it to the holder | `credential.presentation` |
+| check whether a presented one is still valid | `keri.verify_credential(&presentation)?.is_valid()` |
+| revoke one I issued | `identity.revoke(&id).await` (returns the revoked presentation) |
+| the current presentation of one I issued | `identity.presentation(&id)` |
 | list what I've issued | `identity.credentials()` |
-| issue from a group | `group.issue(payload).await` |
-| build full ACDC attestations | the `acdc` crate on top of `advanced::signing` helpers |
+| issue from a group | `group.issue(schema, attributes).await` |
+| build ACDCs with edges, rules, graduated disclosure | `keri_sdk::acdc` with `advanced::registry::issue` |
 
 ## Backup & recovery
 
