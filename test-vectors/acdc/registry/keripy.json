@@ -1,0 +1,32 @@
+{
+ "salt": "0AAwMTIzNDU2Nzg5YWJjZGVm",
+ "issuer": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+ "acdc": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+ "rip": "{\"v\":\"ACDCCAACAAJSONAADa.\",\"t\":\"rip\",\"d\":\"EOVR7wV9SdHktIjqv6Zti7tLuNILqjWRk-uZSJ6-XNLZ\",\"u\":\"0ABrZXJpc3BlY3dvcmtyYXcw\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"n\":\"0\",\"dt\":\"2026-01-01T00:00:00.000000+00:00\"}",
+ "updates": [
+  {
+   "sn": 1,
+   "state": "issued",
+   "uuid": "aLCn6VBWdFGZmtzhOIWHqtAZHAQerL-_eanD_wsDbSoq",
+   "blid": "EIFqoD8fVLkqAuzs_qGF0r_DWMvIVSTmazSVJ9yhMwFA",
+   "block": "EIFqoD8fVLkqAuzs_qGF0r_DWMvIVSTmazSVJ9yhMwFAaLCn6VBWdFGZmtzhOIWHqtAZHAQerL-_eanD_wsDbSoqEHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur0Missued",
+   "bup": "{\"v\":\"ACDCCAACAAJSONAAEi.\",\"t\":\"bup\",\"d\":\"EMvgeSSKH4DZA6PxUa-SCIsO8PdgVzdtV6gZNtz-LA7K\",\"rd\":\"EOVR7wV9SdHktIjqv6Zti7tLuNILqjWRk-uZSJ6-XNLZ\",\"n\":\"1\",\"p\":\"EOVR7wV9SdHktIjqv6Zti7tLuNILqjWRk-uZSJ6-XNLZ\",\"dt\":\"2026-01-02T00:00:00.000000+00:00\",\"b\":\"EIFqoD8fVLkqAuzs_qGF0r_DWMvIVSTmazSVJ9yhMwFA\"}"
+  },
+  {
+   "sn": 2,
+   "state": "revoked",
+   "uuid": "aGlE7I7i5Lqwxz8ATad7801sRl1KW2KDTjCaVpfrUkAV",
+   "blid": "EDEiGn4zqVCajSB-bA7QDGe_zHCp-RUcBGdlIYt-7Emv",
+   "block": "EDEiGn4zqVCajSB-bA7QDGe_zHCp-RUcBGdlIYt-7EmvaGlE7I7i5Lqwxz8ATad7801sRl1KW2KDTjCaVpfrUkAVEHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aurYrevoked",
+   "bup": "{\"v\":\"ACDCCAACAAJSONAAEi.\",\"t\":\"bup\",\"d\":\"EKIFwaI5E9RB0VVrNlVYWNHh5a9aRKsYuK7tcG-vx1Qz\",\"rd\":\"EOVR7wV9SdHktIjqv6Zti7tLuNILqjWRk-uZSJ6-XNLZ\",\"n\":\"2\",\"p\":\"EMvgeSSKH4DZA6PxUa-SCIsO8PdgVzdtV6gZNtz-LA7K\",\"dt\":\"2026-01-03T00:00:00.000000+00:00\",\"b\":\"EDEiGn4zqVCajSB-bA7QDGe_zHCp-RUcBGdlIYt-7Emv\"}"
+  }
+ ],
+ "public_block": {
+  "blid": "ELxSoeWvWR8TqFh7i-cV2ZNYeBz0soqW2-QmqsAfiuqf",
+  "block": "ELxSoeWvWR8TqFh7i-cV2ZNYeBz0soqW2-QmqsAfiuqf1AAPEHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur0Missued"
+ },
+ "bound_block": {
+  "blid": "ECzu19Lb4Q0UuzC5rZMBTTD-0nTRoyq3swmUpVQyWaI3",
+  "block": "ECzu19Lb4Q0UuzC5rZMBTTD-0nTRoyq3swmUpVQyWaI3aLCn6VBWdFGZmtzhOIWHqtAZHAQerL-_eanD_wsDbSoqEHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur0MissuedMAADELC5L3iBVD77d_MYbYGGCUQgqQBju1o4x1Ud-z2sL-ux"
+ }
+}
