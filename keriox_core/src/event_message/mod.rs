@@ -43,11 +43,10 @@ pub enum EventTypeTag {
     Drt,
     Rct,
     Exn,
-    #[cfg(feature = "query")]
+    // Every variant exists in every build, and new ones are only appended:
+    // the stored (archived) value of a tag is its variant's position.
     Rpy,
-    // #[cfg(feature = "query")]
     Qry,
-    // Appended only: the archived discriminant is the variant's position.
     Xip,
     Pro,
     Bar,
@@ -134,6 +133,30 @@ mod tests {
     };
     use cesrox::primitives::CesrPrimitive;
     use ed25519_dalek::SigningKey;
+
+    /// A tag is stored as its variant's position, the same in every build,
+    /// whatever its features.
+    #[test]
+    fn event_type_tags_are_stored_alike_in_every_build() {
+        let tags = [
+            EventTypeTag::Icp,
+            EventTypeTag::Rot,
+            EventTypeTag::Ixn,
+            EventTypeTag::Dip,
+            EventTypeTag::Drt,
+            EventTypeTag::Rct,
+            EventTypeTag::Exn,
+            EventTypeTag::Rpy,
+            EventTypeTag::Qry,
+            EventTypeTag::Xip,
+            EventTypeTag::Pro,
+            EventTypeTag::Bar,
+        ];
+        for (position, tag) in tags.iter().enumerate() {
+            let stored = rkyv::to_bytes::<rkyv::rancor::Error>(tag).unwrap();
+            assert_eq!(stored.as_slice(), [position as u8], "{tag:?}");
+        }
+    }
     use rand::rngs::OsRng;
     use said::derivation::HashFunctionCode;
     use said::version::format::SerializationFormats;
