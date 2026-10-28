@@ -38,6 +38,10 @@ default = []
 keyprovider = ["keri-keyprovider", "tokio/full"]
 storage-postgres = ["keri-controller/storage-postgres", "dep:async-std"]
 mobile = ["keyprovider", "keri-keyprovider/host", "keri-keyprovider/software"]
+# Key providers beyond the in-memory software one, for applications that
+# take keri-keyprovider through keri-sdk.
+keyprovider-file-encrypted = ["keyprovider", "keri-keyprovider/file-encrypted"]
+keyprovider-os-keychain = ["keyprovider", "keri-keyprovider/os-keychain"]
 
 [dev-dependencies]
 tokio-test = "0.4"

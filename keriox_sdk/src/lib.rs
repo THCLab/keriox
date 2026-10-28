@@ -97,3 +97,12 @@ pub use requests::{DelegationApproval, DelegationHandle, PendingRequest};
 pub use retry::RetryPolicy;
 
 pub use advanced::types::StorageConfig;
+
+/// The key provider interface, re-exported so that applications depend on
+/// keri-sdk alone and always get the version keri-sdk is built with.
+#[cfg(feature = "keyprovider")]
+pub use keri_keyprovider as keyprovider;
+#[cfg(feature = "keyprovider")]
+pub use keri_keyprovider::{
+    KeyProvider, KeyProviderError, KeyProviderFactory, PublicKeyData, SignatureAlgorithm,
+};

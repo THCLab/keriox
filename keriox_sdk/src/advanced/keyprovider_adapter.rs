@@ -3,7 +3,7 @@
 //! This module is only available when the `keyprovider` feature is enabled.
 //!
 //! [`KeriSigner`] wraps either a traditional [`Signer`] or a pluggable
-//! [`KeyProvider`] and exposes a uniform sync `sign()` / `public_key()` API
+//! [`KeyProvider`](keri_keyprovider::KeyProvider) and exposes a uniform sync `sign()` / `public_key()` API
 //! that all SDK operations can use.
 
 use std::sync::Arc;
