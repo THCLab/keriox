@@ -293,7 +293,7 @@ impl IssuerSeals {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::sync::Arc;
 
     use chrono::{Duration, TimeZone, Utc};
@@ -324,18 +324,18 @@ mod tests {
     };
 
     /// An Issuer with a KEL in which it anchors registry events.
-    struct Issuer {
+    pub(crate) struct Issuer {
         _path: NamedTempFile,
         processor: BasicProcessor<RedbDatabase>,
-        storage: EventStorage<RedbDatabase>,
+        pub(crate) storage: EventStorage<RedbDatabase>,
         signer: Signer,
-        id: IdentifierPrefix,
+        pub(crate) id: IdentifierPrefix,
         last: SelfAddressingIdentifier,
         sn: u64,
     }
 
     impl Issuer {
-        fn new() -> Self {
+        pub(crate) fn new() -> Self {
             let path = NamedTempFile::new().unwrap();
             let db = Arc::new(RedbDatabase::new(path.path()).unwrap());
             let signer = Signer::new();
@@ -371,7 +371,7 @@ mod tests {
         }
 
         /// Anchors `seals` in an interaction event.
-        fn anchor(&mut self, seals: Vec<Seal>) {
+        pub(crate) fn anchor(&mut self, seals: Vec<Seal>) {
             self.sn += 1;
             let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
                 .with_prefix(&self.id)

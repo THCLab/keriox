@@ -5,9 +5,15 @@
 
 pub mod blind;
 pub mod event;
+pub mod registrar;
+pub mod store;
+pub mod validator;
 pub mod verify;
 
 pub use blind::{BlindedState, Salt};
+pub use registrar::{Blinding, Disclosure, Pending, Registrar};
+pub use store::{MemoryRegistryStore, RegistryStore};
+pub use validator::Validator;
 pub use verify::{verify, AcdcBinding, Binding, RegistryState};
 pub use event::{
     BlindableUpdate, Inception, RegistryEvent, RegistryIlk, RegistryMessage, Update,
@@ -37,6 +43,9 @@ pub enum RegistryError {
     /// The registry state does not bind the presented ACDC.
     #[error("ACDC binding: {0}")]
     Binding(String),
+    /// The store failed, or holds what cannot be read back.
+    #[error("registry store: {0}")]
+    Storage(String),
 }
 
 #[cfg(test)]

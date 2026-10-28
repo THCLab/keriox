@@ -406,7 +406,7 @@ impl TelEscrowDatabase for PostgresTelEscrowDatabase {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::{
         database::{TelEscrowDatabase, TelEventDatabase},
@@ -463,7 +463,7 @@ mod tests {
         *done = true;
     }
 
-    async fn setup_pool() -> PgPool {
+    pub(crate) async fn setup_pool() -> PgPool {
         ensure_schema();
         PgPoolOptions::new()
             .max_connections(5)
