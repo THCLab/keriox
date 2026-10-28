@@ -38,6 +38,18 @@ pub enum EventData {
     Drt(RotationEvent),
 }
 
+impl EventData {
+    /// The seals the event anchors in `a`.
+    pub fn seals(&self) -> &[crate::event::sections::seal::Seal] {
+        match self {
+            Self::Icp(e) => &e.data,
+            Self::Dip(e) => &e.inception_data.data,
+            Self::Rot(e) | Self::Drt(e) => &e.data,
+            Self::Ixn(e) => &e.data,
+        }
+    }
+}
+
 impl EventSemantics for EventData {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         match self {

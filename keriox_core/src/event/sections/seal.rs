@@ -143,6 +143,25 @@ impl DigestSeal {
     pub fn new(said: SelfAddressingIdentifier) -> Self {
         Self { dig: said.into() }
     }
+
+    pub fn digest(&self) -> SelfAddressingIdentifier {
+        self.dig.said.clone()
+    }
+}
+
+impl Seal {
+    /// The digest of the data the seal commits to, for the seals that name
+    /// one in `d`: what a registry event's anchor is matched by.
+    pub fn sealed_digest(&self) -> Option<SelfAddressingIdentifier> {
+        match self {
+            Seal::Event(seal) => Some(seal.event_digest()),
+            Seal::Digest(seal) => Some(seal.digest()),
+            Seal::Source(seal) => Some(seal.digest.said.clone()),
+            Seal::Typed(seal) => Some(seal.digest.said.clone()),
+            Seal::RegistrarBacker(seal) => Some(seal.digest.said.clone()),
+            Seal::Location(_) | Seal::Root(_) | Seal::LatestEstablishment(_) => None,
+        }
+    }
 }
 
 #[derive(
