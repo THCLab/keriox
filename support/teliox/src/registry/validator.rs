@@ -85,13 +85,21 @@ impl<S: RegistryStore> Validator<S> {
                 .into_iter()
                 .filter(|event| event.ilk() != RegistryIlk::Rip),
         );
-        let verified = verify(
-            kel,
-            &disclosure.inception,
-            &updates,
-            disclosure.block.as_ref(),
-            acdc,
-        );
+        // When what was accepted before runs past the disclosure, the head
+        // is a kept update, and so is its block.
+        let head_blid = updates
+            .iter()
+            .max_by_key(|update| update.sn())
+            .and_then(RegistryMessage::blid)
+            .transpose()?;
+        let block = match (&disclosure.block, &head_blid) {
+            (Some(block), Some(blid)) if &block.blid()? != blid => {
+                self.store.block(blid)?.or_else(|| disclosure.block.clone())
+            }
+            (None, Some(blid)) => self.store.block(blid)?,
+            _ => disclosure.block.clone(),
+        };
+        let verified = verify(kel, &disclosure.inception, &updates, block.as_ref(), acdc);
         let verdict = self.judge(kel, verified)?;
         if matches!(verdict, Verdict::Valid { .. }) {
             for event in std::iter::once(&disclosure.inception).chain(&disclosure.updates) {

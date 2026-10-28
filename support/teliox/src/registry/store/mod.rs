@@ -36,6 +36,29 @@ pub trait RegistryStore: Send + Sync {
     fn block(&self, blid: &SelfAddressingIdentifier) -> Result<Option<StateBlock>, RegistryError>;
 }
 
+/// A shared store, such as the one a controller hands to both the Issuer's
+/// and the Validator's side.
+impl<S: RegistryStore + ?Sized> RegistryStore for std::sync::Arc<S> {
+    fn save_event(&self, event: &RegistryMessage) -> Result<(), RegistryError> {
+        (**self).save_event(event)
+    }
+
+    fn events(
+        &self,
+        registry: &SelfAddressingIdentifier,
+    ) -> Result<Vec<RegistryMessage>, RegistryError> {
+        (**self).events(registry)
+    }
+
+    fn save_block(&self, block: &StateBlock) -> Result<(), RegistryError> {
+        (**self).save_block(block)
+    }
+
+    fn block(&self, blid: &SelfAddressingIdentifier) -> Result<Option<StateBlock>, RegistryError> {
+        (**self).block(blid)
+    }
+}
+
 /// A block as the CESR text of its attachment group.
 pub(crate) fn block_to_text(block: &StateBlock) -> Result<String, RegistryError> {
     block.to_group()

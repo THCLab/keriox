@@ -81,6 +81,23 @@ impl<S: RegistryStore> RegistryIssuer<S> {
         })
     }
 
+    /// Issues `acdc` as the first update of the registry `inception`
+    /// starts, before either is kept: a credential names its registry, so
+    /// the registry is incepted first, the ACDC built naming it, and both
+    /// anchored together.
+    pub fn issue_after(
+        &self,
+        inception: &Pending,
+        blinding: &Blinding,
+        acdc: &SelfAddressingIdentifier,
+    ) -> Result<Pending, RegistryError> {
+        let block = StateBlock::new(blinding, inception.event.sn() + 1, Some(acdc), "issued")?;
+        Ok(Pending {
+            event: RegistryMessage::blindable_update(&inception.event, &block.blid()?, &now())?,
+            block: Some(block),
+        })
+    }
+
     /// Issues `acdc` in `registry`.
     pub fn issue(
         &self,
@@ -209,10 +226,10 @@ mod tests {
             registry: Some(registry.clone()),
         };
         let validator = Validator::new(MemoryRegistryStore::new(), Policy::default());
-        let disclosure = registrar.disclosure(&registry).unwrap();
+        let issued_disclosure = registrar.disclosure(&registry).unwrap();
         let state = valid(
             validator
-                .accept(&issuer.storage, &disclosure, Some(&presented))
+                .accept(&issuer.storage, &issued_disclosure, Some(&presented))
                 .unwrap(),
         );
         assert_eq!(state.state.as_deref(), Some("issued"));
@@ -231,6 +248,15 @@ mod tests {
                 .unwrap(),
         );
         assert_eq!((state.sn, state.state.as_deref()), (2, Some("revoked")));
+
+        // Having seen the revocation, the Validator is not shown the issued
+        // state again by the older disclosure.
+        let state = valid(
+            validator
+                .accept(&issuer.storage, &issued_disclosure, Some(&presented))
+                .unwrap(),
+        );
+        assert_eq!(state.state.as_deref(), Some("revoked"));
 
         let blid = disclosure.block.unwrap().blid().unwrap();
         let found = StateBlock::unblind(&blid, &blinding, 2, &acdc(), &["issued", "revoked"])

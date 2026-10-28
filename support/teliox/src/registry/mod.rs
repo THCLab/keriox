@@ -6,6 +6,7 @@
 pub mod blind;
 pub mod event;
 pub mod issuer;
+pub mod presentation;
 pub mod store;
 pub mod validator;
 pub mod verify;
@@ -13,6 +14,7 @@ pub mod verify;
 pub use blind::{Blinding, Salt, StateBlock};
 pub use event::{RegistryIlk, RegistryMessage};
 pub use issuer::{Disclosure, Pending, RegistryIssuer};
+pub use presentation::Presentation;
 pub use store::{MemoryRegistryStore, RegistryStore};
 pub use validator::{AbandonedIssuer, Evidence, Policy, Validator, Verdict};
 pub use verify::{verify, AcdcBinding, Binding, RegistryState};
