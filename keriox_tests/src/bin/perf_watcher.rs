@@ -149,11 +149,9 @@ async fn main() -> Result<()> {
     // 2. Boot watcher --------------------------------------------------------
     let watcher_url = Url::parse(&format!("http://127.0.0.1:{}", watcher_port))?;
     let watcher_dir: PathBuf = Builder::new().prefix("perf-watcher-db").tempdir()?.keep();
-    let watcher_tel_path = watcher_dir.join("tel_storage");
     let watcher_listener = WatcherListener::setup_with_redb(WatcherConfig {
         public_address: watcher_url.clone(),
         db_path: watcher_dir.clone(),
-        tel_storage_path: watcher_tel_path,
         ..Default::default()
     })?;
     let watcher_arc: Arc<Watcher<RedbOobiStorage>> = watcher_listener.watcher.clone();

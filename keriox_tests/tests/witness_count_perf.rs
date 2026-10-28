@@ -54,13 +54,10 @@ async fn spawn_witness(port: u16, seed: &str) -> WitnessHandle {
 
 async fn spawn_watcher(port: u16) -> (BasicPrefix, LocationScheme) {
     let url = Url::parse(&format!("http://127.0.0.1:{port}")).unwrap();
-    let tel_dir = Builder::new().prefix("watcher-tel-db").tempdir().unwrap();
-    let tel_path = tel_dir.path().join("tel_storage");
     let root = Builder::new().prefix("watcher-db").tempdir().unwrap();
     let listener = WatcherListener::setup_with_redb(WatcherConfig {
         public_address: url.clone(),
         db_path: root.path().to_owned(),
-        tel_storage_path: tel_path,
         ..Default::default()
     })
     .unwrap();
@@ -71,7 +68,6 @@ async fn spawn_watcher(port: u16) -> (BasicPrefix, LocationScheme) {
         url: Some(url.clone()),
     };
     actix_rt::spawn(listener.listen_http((Ipv4Addr::UNSPECIFIED, port)));
-    std::mem::forget(tel_dir);
     std::mem::forget(root);
     (id, oobi)
 }

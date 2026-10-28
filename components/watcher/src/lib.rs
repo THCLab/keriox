@@ -10,6 +10,5 @@ mod client_gate;
 pub mod metrics;
 #[cfg(test)]
 mod test;
-pub mod transport;
 mod watcher;
 pub mod watcher_listener;

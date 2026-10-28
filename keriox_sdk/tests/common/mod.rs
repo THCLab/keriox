@@ -98,7 +98,6 @@ pub fn spawn_watcher_writing(
     let listener = WatcherListener::setup_with_redb(WatcherConfig {
         public_address: Url::parse(&url).unwrap(),
         db_path: db_dir.path().to_owned(),
-        tel_storage_path: db_dir.path().join("tel_storage"),
         keri_version,
         ..Default::default()
     })

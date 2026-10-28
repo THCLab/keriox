@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 use tracing::info;
 use url::Url;
-use watcher::{transport::HttpTelTransport, WatcherConfig, WatcherListener};
+use watcher::{WatcherConfig, WatcherListener};
 
 #[serde_as]
 #[derive(Deserialize)]
@@ -50,8 +50,6 @@ pub struct Config {
 
     #[serde(default, deserialize_with = "deserialize_escrow_config")]
     escrow_config: EscrowConfig,
-
-    tel_storage_path: PathBuf,
 
     /// Interval in seconds between background witness polling cycles.
     /// Defaults to 30 seconds. Set to 0 to disable.
@@ -137,10 +135,6 @@ struct Args {
     #[serde(skip_serializing_if = "Option::is_none")]
     db_path: Option<PathBuf>,
 
-    #[arg(short = 't', long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tel_storage_path: Option<PathBuf>,
-
     #[arg(short = 'u', long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     public_url: Option<Url>,
@@ -193,9 +187,7 @@ async fn main() -> anyhow::Result<()> {
         db_path: cfg.db_path.clone(),
         priv_key: cfg.seed,
         transport: Box::new(DefaultTransport::new()),
-        tel_transport: Box::new(HttpTelTransport),
         escrow_config: cfg.escrow_config,
-        tel_storage_path: cfg.tel_storage_path,
         poll_interval: cfg.poll_interval.unwrap_or(Duration::from_secs(30)),
         kel_update_timeout: cfg
             .kel_update_timeout

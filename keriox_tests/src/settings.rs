@@ -125,15 +125,12 @@ impl InfrastructureContext {
         actix_rt::spawn(second_witness.listen_http((Ipv4Addr::LOCALHOST, second_port)));
 
         let watcher_url = Url::parse(&format!("http://127.0.0.1:{watcher_port}")).unwrap();
-        let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
-        let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
 
         let watcher_listener = {
             let root = Builder::new().prefix("watcher-test-db").tempdir().unwrap();
             WatcherListener::setup_with_redb(WatcherConfig {
                 public_address: watcher_url.clone(),
                 db_path: root.path().to_owned(),
-                tel_storage_path: watcher_tel_path,
                 keri_version: version,
                 ..Default::default()
             })

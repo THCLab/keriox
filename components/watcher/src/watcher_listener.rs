@@ -46,7 +46,6 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
         crate::metrics::record_build_info();
         crate::metrics::sampler::spawn(self.watcher.clone());
         let data = self.watcher.clone();
-        spawn(update_tel_checking(data.clone()));
         spawn(update_checking(data.clone()));
         spawn(witness_polling(data));
 
@@ -119,10 +118,6 @@ impl<S: OobiStorageBackend> WatcherListener<S> {
 
 pub async fn update_checking<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
     data.process_update_requests().await;
-}
-
-pub async fn update_tel_checking<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
-    let _ = data.process_update_tel_requests().await;
 }
 
 pub async fn witness_polling<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
@@ -331,30 +326,6 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
-    #[tracing::instrument(skip_all, fields(bytes = post_data.len()))]
-    pub async fn process_tel_query<S: OobiStorageBackend>(
-        post_data: String,
-        data: web::Data<Arc<Watcher<S>>>,
-    ) -> Result<HttpResponse, ApiError> {
-        let _timer = crate::metrics::LatencyTimer::new(
-            crate::metrics::names::HANDLER_SECONDS,
-            vec![("endpoint", "tel_query".to_string())],
-        );
-        tracing::info!("Processing TEL query");
-        tracing::debug!(payload = %post_data, "TEL query payload");
-        let resp = data
-            .parse_and_process_tel_queries(post_data.as_bytes())
-            .await?
-            .iter()
-            .map(|msg| msg.to_string())
-            .collect::<Vec<_>>()
-            .join("");
-        tracing::debug!(response = %resp, "TEL query response");
-        Ok(HttpResponse::Ok()
-            .content_type(ContentType::plaintext())
-            .body(resp))
-    }
-
     #[derive(Debug, derive_more::Display, derive_more::From, derive_more::Error)]
     pub struct ApiError(pub ActorError);
 
@@ -415,13 +386,6 @@ pub mod http_handlers {
         data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
     ) -> Result<HttpResponse, ApiError> {
         resolve_role(path, data).await
-    }
-
-    pub async fn process_tel_query_redb(
-        post_data: String,
-        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
-    ) -> Result<HttpResponse, ApiError> {
-        process_tel_query(post_data, data).await
     }
 
     pub async fn health<S: OobiStorageBackend>(

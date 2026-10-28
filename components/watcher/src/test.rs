@@ -65,15 +65,11 @@ async fn test_watcher_access() -> Result<(), ActorError> {
         .encode()
         .unwrap();
 
-    let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
-    let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
-
     let url = Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
     let watcher = Watcher::setup_with_redb(crate::WatcherConfig {
         public_address: url,
         db_path: root.path().to_owned(),
-        tel_storage_path: watcher_tel_path,
         ..Default::default()
     })?;
 
@@ -165,14 +161,11 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
 
     let url = url::Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-    let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
-    let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
 
     let watcher = Watcher::setup_with_redb(WatcherConfig {
         public_address: url,
         db_path: root.path().to_owned(),
         transport: Box::new(transport),
-        tel_storage_path: watcher_tel_path,
         ..Default::default()
     })?;
 
@@ -303,13 +296,10 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
     // Spin up a watcher with on-disk redb so the OOBI manager exercises
     // the same storage path production uses.
     let root = Builder::new().prefix("watcher-loc-scheme-test").tempdir().unwrap();
-    let watcher_tel_dir = Builder::new().prefix("watcher-loc-scheme-tel").tempdir().unwrap();
-    let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
     let dummy_public = Url::parse("http://watcher-under-test/").unwrap();
     let watcher = Watcher::setup_with_redb(WatcherConfig {
         public_address: dummy_public,
         db_path: root.path().to_owned(),
-        tel_storage_path: watcher_tel_path,
         ..Default::default()
     })?;
 
@@ -369,12 +359,9 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
     // Case 2: insertion order should not affect the outcome. Use a
     // fresh watcher so the previous replies don't leak in.
     let root2 = Builder::new().prefix("watcher-loc-scheme-test-2").tempdir().unwrap();
-    let watcher_tel_dir2 = Builder::new().prefix("watcher-loc-scheme-tel-2").tempdir().unwrap();
-    let watcher_tel_path2 = watcher_tel_dir2.path().join("tel_storage");
     let watcher2 = Watcher::setup_with_redb(WatcherConfig {
         public_address: Url::parse("http://watcher-under-test-2/").unwrap(),
         db_path: root2.path().to_owned(),
-        tel_storage_path: watcher_tel_path2,
         ..Default::default()
     })?;
     watcher2.watcher_data.process_reply(https_reply.clone()).unwrap();
@@ -389,12 +376,9 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
     // value. Use yet another fresh watcher so the assertion does not
     // depend on test execution order.
     let root3 = Builder::new().prefix("watcher-loc-scheme-test-3").tempdir().unwrap();
-    let watcher_tel_dir3 = Builder::new().prefix("watcher-loc-scheme-tel-3").tempdir().unwrap();
-    let watcher_tel_path3 = watcher_tel_dir3.path().join("tel_storage");
     let watcher3 = Watcher::setup_with_redb(WatcherConfig {
         public_address: Url::parse("http://watcher-under-test-3/").unwrap(),
         db_path: root3.path().to_owned(),
-        tel_storage_path: watcher_tel_path3,
         ..Default::default()
     })?;
     let unknown_eid = IdentifierPrefix::Basic(BasicPrefix::Ed25519(Signer::new().public_key()));
@@ -445,22 +429,20 @@ mod abandonment {
     use crate::{watcher_listener::http_handlers, Watcher, WatcherConfig};
 
     struct Fixture {
-        _dirs: (TempDir, TempDir),
+        _dir: TempDir,
         watcher: Arc<Watcher<RedbOobiStorage>>,
     }
 
     fn setup() -> Fixture {
-        let tel = Builder::new().prefix("watcher-tel").tempdir().unwrap();
         let db = Builder::new().prefix("watcher-db").tempdir().unwrap();
         let watcher = Watcher::setup_with_redb(WatcherConfig {
             public_address: Url::parse("http://some/dummy/url").unwrap(),
             db_path: db.path().to_owned(),
-            tel_storage_path: tel.path().join("tel_storage"),
             ..Default::default()
         })
         .unwrap();
         Fixture {
-            _dirs: (tel, db),
+            _dir: db,
             watcher: Arc::new(watcher),
         }
     }
@@ -527,7 +509,7 @@ mod abandonment {
         let fx = setup();
         let known = incept(&fx);
         let Fixture {
-            _dirs: (tel, db),
+            _dir: db,
             watcher,
         } = fx;
         drop(watcher);
@@ -535,7 +517,6 @@ mod abandonment {
         let watcher = Watcher::setup_with_redb(WatcherConfig {
             public_address: Url::parse("http://some/dummy/url").unwrap(),
             db_path: db.path().to_owned(),
-            tel_storage_path: tel.path().join("tel_storage"),
             ..Default::default()
         })
         .unwrap();
@@ -556,7 +537,7 @@ mod abandonment {
         poller.track_aid(untracked.id.clone());
         poller.untrack_aid(&untracked.id);
         let Fixture {
-            _dirs: (tel, db),
+            _dir: db,
             watcher,
         } = fx;
         drop(watcher);
@@ -564,7 +545,6 @@ mod abandonment {
         let watcher = Watcher::setup_with_redb(WatcherConfig {
             public_address: Url::parse("http://some/dummy/url").unwrap(),
             db_path: db.path().to_owned(),
-            tel_storage_path: tel.path().join("tel_storage"),
             ..Default::default()
         })
         .unwrap();
@@ -666,12 +646,10 @@ mod abandonment {
 
     #[actix_web::test]
     async fn info_reports_the_keri_version_the_watcher_writes() {
-        let tel = Builder::new().prefix("watcher-tel").tempdir().unwrap();
         let db = Builder::new().prefix("watcher-db").tempdir().unwrap();
         let watcher = Watcher::setup_with_redb(WatcherConfig {
             public_address: Url::parse("http://some/dummy/url").unwrap(),
             db_path: db.path().to_owned(),
-            tel_storage_path: tel.path().join("tel_storage"),
             keri_version: keri_core::event_message::keri_version::KeriVersion::V1_0,
             ..Default::default()
         })
@@ -683,169 +661,6 @@ mod abandonment {
             info["keri"],
             serde_json::json!({ "protocol": "1.0", "cesr_genus": "2.0" })
         );
-    }
-}
-
-/// TEL queries reach the watcher's cached TEL for a credential, so they need
-/// the same access control as KEL queries: a known signer with a watcher end
-/// role and a signature that verifies over the query.
-mod tel_query_access {
-    use std::sync::{Arc, Mutex};
-
-    use keri_controller::SelfSigningPrefix;
-    use keri_core::{
-        actor::{
-            error::ActorError,
-            prelude::{HashFunctionCode, SerializationFormats},
-            simple_controller::SimpleController,
-            SignedQueryError,
-        },
-        database::redb::RedbDatabase,
-        event_message::{keri_version::KeriVersion, msg::KeriEvent, timestamped::Timestamped},
-        oobi_manager::RedbOobiStorage,
-        prefix::{IdentifierPrefix, IndexedSignature},
-        processor::escrow::EscrowConfig,
-        signer::{CryptoBox, KeyManager},
-    };
-    use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute};
-    use tempfile::{Builder, TempDir};
-    use url::Url;
-
-    use crate::Watcher;
-
-    struct Fixture {
-        watcher: Watcher<RedbOobiStorage>,
-        asker: SimpleController<CryptoBox, RedbDatabase, RedbOobiStorage>,
-        _dirs: Vec<TempDir>,
-    }
-
-    fn setup() -> Fixture {
-        let asker_db_dir = Builder::new().prefix("tel-qry-asker").tempdir().unwrap();
-        let asker_db = Arc::new(RedbDatabase::new(&asker_db_dir.path().join("events")).unwrap());
-        let keys = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
-        let mut asker = SimpleController::new(asker_db, keys, EscrowConfig::default()).unwrap();
-        let asker_icp = asker.incept(None, None, None).unwrap().encode().unwrap();
-
-        let root = Builder::new().prefix("tel-qry-watcher").tempdir().unwrap();
-        let watcher = Watcher::setup_with_redb(crate::WatcherConfig {
-            public_address: Url::parse("http://some/dummy/url").unwrap(),
-            db_path: root.path().to_owned(),
-            tel_storage_path: root.path().join("tel_storage"),
-            ..Default::default()
-        })
-        .unwrap();
-        watcher.parse_and_process_notices(&asker_icp).unwrap();
-
-        Fixture {
-            watcher,
-            asker,
-            _dirs: vec![asker_db_dir, root],
-        }
-    }
-
-    fn tel_query() -> TelQueryEvent {
-        let id: IdentifierPrefix = "EA8Ih8hxLi3mmkyItXK1u55cnHl4WgNZ_RE-gKXqgcX4"
-            .parse()
-            .unwrap();
-        let ri: IdentifierPrefix = "EO0_SyqPS1-EVYSITakYpUHaUZZpZGsjaXFOaO_kCfS4"
-            .parse()
-            .unwrap();
-        KeriEvent::new(
-            KeriVersion::V1_0,
-            SerializationFormats::JSON,
-            HashFunctionCode::Blake3_256.into(),
-            Timestamped::new(TelQueryRoute::Tels {
-                reply_route: "".into(),
-                args: TelQueryArgs {
-                    i: Some(id),
-                    ri: Some(ri),
-                },
-            }),
-        )
-    }
-
-    fn signed_by(fx: &Fixture, qry: TelQueryEvent, signed_bytes: &[u8]) -> Vec<u8> {
-        let sig = fx
-            .asker
-            .key_manager
-            .lock()
-            .unwrap()
-            .sign(signed_bytes)
-            .unwrap();
-        SignedTelQuery::new_trans(
-            qry,
-            fx.asker.prefix().clone(),
-            vec![IndexedSignature::new_both_same(
-                SelfSigningPrefix::Ed25519Sha512(sig),
-                0,
-            )],
-        )
-        .to_cesr()
-        .unwrap()
-    }
-
-    async fn grant_watcher_role(fx: &Fixture) {
-        let end_role = fx
-            .asker
-            .add_watcher(&IdentifierPrefix::Basic(fx.watcher.prefix()))
-            .unwrap();
-        fx.watcher.watcher_data.process_op(end_role).await.unwrap();
-    }
-
-    #[actix_web::test]
-    async fn a_signer_without_a_watcher_role_is_refused() {
-        let fx = setup();
-        let qry = tel_query();
-        let stream = signed_by(&fx, qry.clone(), &qry.encode().unwrap());
-
-        let result = fx
-            .watcher
-            .parse_and_process_tel_queries(&stream)
-            .await
-            .map(|replies| replies.len());
-
-        assert!(
-            matches!(result, Err(ActorError::MissingRole { .. })),
-            "expected MissingRole, got {result:?}"
-        );
-    }
-
-    #[actix_web::test]
-    async fn a_signature_over_other_bytes_is_refused() {
-        let fx = setup();
-        grant_watcher_role(&fx).await;
-        let qry = tel_query();
-        let stream = signed_by(&fx, qry, b"some other message");
-
-        let result = fx
-            .watcher
-            .parse_and_process_tel_queries(&stream)
-            .await
-            .map(|replies| replies.len());
-
-        assert!(
-            matches!(
-                result,
-                Err(ActorError::QueryError(SignedQueryError::InvalidSignature))
-            ),
-            "expected InvalidSignature, got {result:?}"
-        );
-    }
-
-    #[actix_web::test]
-    async fn a_signed_query_from_a_controller_with_the_role_is_answered() {
-        let fx = setup();
-        grant_watcher_role(&fx).await;
-        let qry = tel_query();
-        let stream = signed_by(&fx, qry.clone(), &qry.encode().unwrap());
-
-        let result = fx
-            .watcher
-            .parse_and_process_tel_queries(&stream)
-            .await
-            .map(|replies| replies.len());
-
-        assert!(result.is_ok(), "expected an answer, got {result:?}");
     }
 }
 
@@ -873,7 +688,6 @@ async fn a_mailbox_query_to_a_watcher_is_refused() {
     let watcher = Watcher::setup_with_redb(WatcherConfig {
         public_address: Url::parse("http://some/dummy/url").unwrap(),
         db_path: root.path().to_owned(),
-        tel_storage_path: root.path().join("tel_storage"),
         ..Default::default()
     })
     .unwrap();
@@ -949,7 +763,6 @@ mod query_status {
         let watcher = Watcher::setup_with_redb(WatcherConfig {
             public_address: Url::parse("http://some/dummy/url").unwrap(),
             db_path: root.path().to_owned(),
-            tel_storage_path: root.path().join("tel_storage"),
             ..Default::default()
         })
         .unwrap();

@@ -27,11 +27,7 @@ use keri_core::{
 };
 use keri_core::{
     database::redb::RedbDatabase,
-    event_message::{
-        msg::KeriEvent,
-        signed_event_message::{Message, Notice, Op},
-        timestamped::Timestamped,
-    },
+    event_message::signed_event_message::{Message, Notice, Op},
 };
 use keri_core::{
     oobi_manager::{storage::OobiStorageBackend, OobiManager},
@@ -45,12 +41,10 @@ use keri_core::{
         LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery, SignedQueryMessage,
     },
 };
-use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryRoute};
 use tokio::sync::mpsc::Sender;
 
-use crate::transport::WatcherTelTransport;
 
-use super::{config::WatcherConfig, health::WitnessHealthTracker, tel_providing::TelToForward};
+use super::{config::WatcherConfig, health::WitnessHealthTracker};
 
 /// A KEL update request with an optional completion signal.
 pub(crate) struct UpdateRequest {
@@ -67,12 +61,8 @@ pub struct WatcherData<S: OobiStorageBackend> {
     pub oobi_manager: OobiManager<S>,
     pub signer: Arc<Signer>,
     pub transport: Box<dyn Transport + Send + Sync>,
-    pub tel_transport: Box<dyn WatcherTelTransport + Send + Sync>,
     /// Watcher will update KEL of the identifiers that have been sent to this channel.
     tx: Sender<UpdateRequest>,
-    /// Watcher will update TEL of the identifiers (registry_id, vc_id) that have been sent to this channel.
-    pub tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
-    pub(super) tel_to_forward: Arc<TelToForward>,
     reply_escrow: Arc<ReplyEscrow<RedbDatabase>>,
     pub(crate) health_tracker: Arc<WitnessHealthTracker>,
     kel_update_timeout: std::time::Duration,
@@ -84,7 +74,6 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     pub(crate) fn new(
         config: WatcherConfig,
         tx: Sender<UpdateRequest>,
-        tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
         oobi_manager: OobiManager<S>,
     ) -> Result<Arc<Self>, ActorError> {
         let WatcherConfig {
@@ -93,14 +82,10 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             priv_key,
             transport,
             escrow_config,
-            tel_storage_path,
-            tel_transport,
             poll_interval: _, // handled by Watcher, not WatcherData
             kel_update_timeout,
             keri_version,
         } = config;
-        let mut tel_to_forward_path = tel_storage_path.clone();
-        tel_to_forward_path.push("to_forward");
 
         let signer = Arc::new(
             priv_key
@@ -163,12 +148,6 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             oobi_manager,
             transport,
             tx,
-            tel_to_forward: Arc::new(
-                TelToForward::new(tel_to_forward_path)
-                    .map_err(|e| ActorError::GeneralError(e.to_string()))?,
-            ),
-            tel_tx,
-            tel_transport,
             reply_escrow,
             health_tracker: Arc::new(WitnessHealthTracker::new()),
             kel_update_timeout,
@@ -660,47 +639,6 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         }
 
         Ok(max_sn)
-    }
-
-    pub(crate) async fn tel_update(
-        &self,
-        about_ri: &IdentifierPrefix,
-        about_vc_id: &IdentifierPrefix,
-        wit_id: IdentifierPrefix,
-    ) -> Result<(), ActorError> {
-        let loc = self.latest_loc_scheme(&wit_id)?;
-        let route = TelQueryRoute::Tels {
-            reply_route: "".into(),
-            args: TelQueryArgs {
-                i: Some(about_vc_id.clone()),
-                ri: Some(about_ri.clone()),
-            },
-        };
-        let env = Timestamped::new(route);
-        let qry = KeriEvent::new(
-            KeriVersion::V1_0,
-            SerializationFormats::JSON,
-            HashFunctionCode::Blake3_256.into(),
-            env,
-        );
-
-        // sign message by watcher
-        let signature = SelfSigningPrefix::Ed25519Sha512(
-            self.signer.sign(
-                serde_json::to_vec(&qry)
-                    .map_err(|e| keri_core::error::Error::SerializationError(e.to_string()))?,
-            )?,
-        );
-        let query = SignedTelQuery::new_nontrans(qry, self.prefix.clone(), signature);
-        let resp = self
-            .tel_transport
-            .send_query(query, loc)
-            .await
-            .map_err(|e| ActorError::GeneralError(e.to_string()))?;
-        self.tel_to_forward
-            .save(about_ri, about_vc_id, resp)
-            .map_err(|e| ActorError::GeneralError(e.to_string()))?;
-        Ok(())
     }
 
     /// Query a specific witness for the KSN of a prefix.

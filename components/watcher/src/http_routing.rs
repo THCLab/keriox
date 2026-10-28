@@ -43,10 +43,6 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         actix_web::web::post().to(http_handlers::resolve_oobi_redb),
     )
     .route(
-        "/query/tel",
-        actix_web::web::post().to(http_handlers::process_tel_query_redb),
-    )
-    .route(
         "/identifiers/{id}/state",
         actix_web::web::get().to(http_handlers::identifier_state_redb),
     )

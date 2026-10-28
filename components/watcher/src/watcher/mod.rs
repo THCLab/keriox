@@ -1,7 +1,6 @@
 pub mod config;
 pub mod health;
 pub mod poller;
-mod tel_providing;
 mod tracked_aids;
 pub(crate) mod watcher_data;
 
@@ -24,29 +23,14 @@ use keri_core::{
     query::reply_event::{ReplyRoute, SignedReply},
 };
 use poller::WitnessPoller;
-use tel_providing::RegistryMapping;
-use teliox::{database::redb::RedbTelDatabase, event::parse_tel_query_stream};
-use teliox::{
-    event::verifiable_event::VerifiableEvent,
-    processor::{validator::TelEventValidator, TelReplyType},
-    query::TelQueryRoute,
-};
 use tokio::sync::mpsc::{channel, Receiver};
 use watcher_data::{UpdateRequest, WatcherData};
 
 use crate::WatcherConfig;
 
-enum WitnessResp {
-    Kel(Vec<Message>),
-    Tel(Vec<VerifiableEvent>),
-}
-
 pub struct Watcher<S: OobiStorageBackend> {
     pub(crate) watcher_data: Arc<WatcherData<S>>,
     recv: Mutex<Receiver<UpdateRequest>>,
-    tel_recv: Mutex<Receiver<(IdentifierPrefix, IdentifierPrefix)>>,
-    // Maps registry id to witness id provided by oobi
-    registry_id_mapping: RegistryMapping,
     /// Background poller for proactively fetching KEL updates from witnesses.
     pub(crate) poller: Arc<WitnessPoller<S>>,
 }
@@ -54,17 +38,12 @@ pub struct Watcher<S: OobiStorageBackend> {
 impl<S: OobiStorageBackend> Watcher<S> {
     pub fn new(config: WatcherConfig, oobi_manager: OobiManager<S>) -> Result<Self, ActorError> {
         let (tx, rx) = channel::<UpdateRequest>(100);
-        let (tel_tx, tel_rx) = channel::<(IdentifierPrefix, IdentifierPrefix)>(100);
-        let tel_storage_path = config.tel_storage_path.clone();
         let poll_interval = config.poll_interval;
-        create_dir_all(&tel_storage_path).unwrap();
-        let mut registry_ids_storage_path = tel_storage_path.clone();
-        registry_ids_storage_path.push("registry");
         create_dir_all(&config.db_path).map_err(|e| ActorError::GeneralError(e.to_string()))?;
         let tracked_aids =
             tracked_aids::TrackedAidsStore::open(&config.db_path.join("tracked_aids"))
                 .map_err(|e| ActorError::GeneralError(e.to_string()))?;
-        let watcher_data = WatcherData::new(config, tx, tel_tx, oobi_manager)?;
+        let watcher_data = WatcherData::new(config, tx, oobi_manager)?;
         let poller = Arc::new(WitnessPoller::new(
             watcher_data.clone(),
             poll_interval,
@@ -73,9 +52,6 @@ impl<S: OobiStorageBackend> Watcher<S> {
         Ok(Watcher {
             watcher_data,
             recv: Mutex::new(rx),
-            tel_recv: Mutex::new(tel_rx),
-            registry_id_mapping: RegistryMapping::new(&registry_ids_storage_path)
-                .map_err(|e| ActorError::GeneralError(e.to_string()))?,
             poller,
         })
     }
@@ -134,26 +110,6 @@ impl<S: OobiStorageBackend> Watcher<S> {
         }
     }
 
-    pub async fn process_update_tel_requests(&self) -> Result<(), ActorError> {
-        let mut recv = self.tel_recv.lock().unwrap();
-        while let Some((ri, vc_id)) = recv.recv().await {
-            let who_to_ask = self
-                .registry_id_mapping
-                .get(&ri)
-                .map_err(|e| ActorError::GeneralError(e.to_string()))
-                .unwrap()
-                .ok_or(ActorError::GeneralError(format!(
-                    "Can't find TEL of id: {}",
-                    ri
-                )))?;
-
-            self.watcher_data
-                .tel_update(&ri, &vc_id, who_to_ask.clone())
-                .await?;
-        }
-        Ok(())
-    }
-
     pub fn oobi(&self) -> LocationScheme {
         LocationScheme::new(
             IdentifierPrefix::Basic(self.prefix()),
@@ -202,55 +158,13 @@ impl<S: OobiStorageBackend> Watcher<S> {
                 .transport
                 .request_end_role(loc, er.cid.clone(), er.role, er.eid.clone())
                 .await?;
-            match Self::parse_witness_response(&oobis)? {
-                WitnessResp::Kel(kel_event) => {
-                    for m in kel_event {
-                        match m {
-                            Message::Op(op) => {
-                                self.watcher_data.process_op(op).await?;
-                            }
-                            Message::Notice(not) => {
-                                self.watcher_data.process_notice(not)?;
-                            }
-                        }
+            for m in parse_event_stream(&oobis)? {
+                match m {
+                    Message::Op(op) => {
+                        self.watcher_data.process_op(op).await?;
                     }
-                }
-                WitnessResp::Tel(tel_events) => {
-                    // The registry's management events, each anchored in the
-                    // KEL of the issuer its inception names. The stream comes
-                    // from a peer, so anything else is an error, not a panic.
-                    let tel_error = |e: String| ActorError::GeneralError(e);
-                    let mut issuer = None;
-                    for ev in tel_events {
-                        let digest = ev.event.get_digest().map_err(|e| tel_error(e.to_string()))?;
-                        let issuer_id = match ev.event {
-                            teliox::event::Event::Management(man) => match man.data.event_type {
-                                teliox::event::manager_event::ManagerEventType::Vcp(vcp) => {
-                                    issuer.insert(vcp.issuer_id).clone()
-                                }
-                                teliox::event::manager_event::ManagerEventType::Vrt(_) => {
-                                    issuer.clone().ok_or_else(|| {
-                                        tel_error("registry rotation before its inception".into())
-                                    })?
-                                }
-                            },
-                            teliox::event::Event::Vc(_) => {
-                                return Err(tel_error(
-                                    "a credential event where registry events were expected".into(),
-                                ))
-                            }
-                        };
-                        let seal = &ev.seal;
-                        TelEventValidator::<RedbTelDatabase, RedbDatabase>::check_kel_event(
-                            self.watcher_data.event_storage.clone(),
-                            seal,
-                            &issuer_id,
-                            digest,
-                        )
-                        .map_err(|e| tel_error(e.to_string()))?;
-                        self.registry_id_mapping
-                            .save(er.cid.clone(), er.eid.clone())
-                            .map_err(|e| ActorError::GeneralError(e.to_string()))?;
+                    Message::Notice(not) => {
+                        self.watcher_data.process_notice(not)?;
                     }
                 }
             }
@@ -270,18 +184,6 @@ impl<S: OobiStorageBackend> Watcher<S> {
             .await?;
         self.watcher_data.process_ops(oobis).await?;
         Ok(())
-    }
-
-    fn parse_witness_response(input: &[u8]) -> Result<WitnessResp, ActorError> {
-        match parse_event_stream(input) {
-            Ok(msgs) => Ok(WitnessResp::Kel(msgs)),
-            Err(_) => {
-                // try to parse tel event
-                VerifiableEvent::parse(input)
-                    .map(|tel_events| WitnessResp::Tel(tel_events))
-                    .map_err(|e| ActorError::GeneralError(e.to_string()))
-            }
-        }
     }
 
     pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
@@ -316,54 +218,5 @@ impl<S: OobiStorageBackend> Watcher<S> {
             self.watcher_data.process_reply(reply)?;
         }
         Ok(())
-    }
-
-    pub async fn parse_and_process_tel_queries(
-        &self,
-        input_stream: &[u8],
-    ) -> Result<Vec<TelReplyType>, ActorError> {
-        let tel_queries = parse_tel_query_stream(input_stream)
-            .map_err(|_e| ActorError::GeneralError("Can't parse TEL query stream".to_string()))?
-            .into_iter();
-
-        let mut out = vec![];
-        for qry in tel_queries {
-            self.watcher_data.authorize_query(
-                &qry.signature,
-                &qry.query.encode().map_err(|_e| Error::VersionError)?,
-            )?;
-            let (ri, vc_id) = match qry.query.data.data {
-                TelQueryRoute::Tels {
-                    reply_route: _,
-                    args,
-                } => match (args.ri, args.i) {
-                    (Some(ri), Some(i)) => (ri, i),
-                    _ => {
-                        return Err(ActorError::GeneralError(
-                            "Wrong TEL query format. `ri` and `i` field required".to_string(),
-                        ))
-                    }
-                },
-            };
-            // Query witness about new tel events
-            self.watcher_data
-                .tel_tx
-                .send((ri.clone(), vc_id.clone()))
-                .await
-                .map_err(|_e| {
-                    ActorError::GeneralError("Internal watcher error: channel problem".to_string())
-                })?;
-
-            // Check if you have tel to forward
-            if let Some(tel) = self
-                .watcher_data
-                .tel_to_forward
-                .get(&ri, &vc_id)
-                .map_err(|e| ActorError::GeneralError(e.to_string()))?
-            {
-                out.push(TelReplyType::Tel(tel.clone().as_bytes().to_vec()))
-            };
-        }
-        Ok(out)
     }
 }
