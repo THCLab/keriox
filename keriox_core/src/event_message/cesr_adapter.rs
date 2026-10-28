@@ -1283,6 +1283,7 @@ pub mod test {
     /// A body is read as the type its `t` names, never as another type of
     /// the same shape: a query labelled as a prod is a prod, and one
     /// labelled with a type of another shape is refused.
+    #[cfg(feature = "query")]
     #[test]
     fn a_body_is_read_as_the_type_it_names() {
         use super::EventType;
