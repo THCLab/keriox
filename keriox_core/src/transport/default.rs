@@ -125,8 +125,15 @@ where
                 Op::Query(_) => panic!("can't send query in send_message"),
                 #[cfg(feature = "query")]
                 Op::Reply(_) => "register",
+                // Witnesses and watchers keep no forwards: the application
+                // delivers them.
                 #[cfg(feature = "mailbox")]
-                Op::Exchange(_) => "forward",
+                Op::Exchange(_) => {
+                    return Err(TransportError::UnknownError(
+                        "forwards are delivered by the application, not posted to a witness or watcher"
+                            .into(),
+                    ))
+                }
             },
         };
         let url = endpoint(&loc, path)?;

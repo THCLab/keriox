@@ -1,14 +1,4 @@
-use serde::{Deserialize, Serialize};
-
-use crate::event_message::signed_event_message::{
-    SignedEventMessage, SignedNontransferableReceipt,
-};
+//! Exchange messages: the `/fwd` forward that carries a key event from one
+//! identifier to another, delivered by whatever channel the parties use.
 
 pub mod exchange;
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct MailboxResponse {
-    pub receipt: Vec<SignedNontransferableReceipt>,
-    pub multisig: Vec<SignedEventMessage>,
-    pub delegate: Vec<SignedEventMessage>,
-}

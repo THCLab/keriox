@@ -83,7 +83,6 @@ where
                     Err(WatcherResponseError::ResponseProcessingError(errs))
                 }
             }
-            Ok(PossibleResponse::Mbx(_mbx)) => Err(WatcherResponseError::UnexpectedResponse),
             Ok(PossibleResponse::Ksn(_)) => Err(WatcherResponseError::UnexpectedResponse),
             Err(SendingError::ActorInternalError(ActorError::NotFound(id))) => {
                 Err(WatcherResponseError::KELNotFound(id))

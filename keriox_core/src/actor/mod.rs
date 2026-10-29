@@ -32,7 +32,6 @@ use crate::{
 #[cfg(feature = "mailbox")]
 use crate::{
     mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
-    query::mailbox::MailboxRoute,
 };
 pub use cesrox::cesr_proof::MaterialPath;
 
@@ -227,23 +226,6 @@ pub fn verify_forward<D: EventDatabase>(
     })
 }
 
-#[cfg(feature = "mailbox")]
-pub fn process_signed_exn<D: EventDatabase>(
-    exn: SignedExchange,
-    storage: &EventStorage<D>,
-) -> Result<(), Error> {
-    let forwarded = verify_forward(&exn, storage)?;
-    match forwarded.topic {
-        ForwardTopic::Multisig => {
-            storage.add_mailbox_multisig(&forwarded.recipient, forwarded.event)?;
-        }
-        ForwardTopic::Delegate => {
-            storage.add_mailbox_delegate(&forwarded.recipient, forwarded.event)?;
-        }
-    };
-    Ok(())
-}
-
 #[cfg(feature = "query")]
 pub fn process_signed_query<D: EventDatabase>(
     qr: SignedQueryMessage,
@@ -272,15 +254,10 @@ pub fn process_signed_query<D: EventDatabase>(
                 storage,
             )?)
         }
+        // Witnesses witness and keep no mailbox: forwards go between the
+        // parties through any channel, a messagebox for instance.
         #[cfg(feature = "mailbox")]
-        SignedQueryMessage::MailboxQuery(mqry) => {
-            let signature = mqry.signature.clone();
-            tracing::trace!(?signature, "MailboxQuery signature");
-            let data = &mqry.query.encode().map_err(|_e| Error::VersionError)?;
-            // check signatures
-            verify(&data, signature)?;
-            Ok(process_mailbox_query(&mqry.query.data.data, storage)?)
-        }
+        SignedQueryMessage::MailboxQuery(_) => Err(QueryError::Unsupported("mbx".into()).into()),
     }
 }
 
@@ -343,19 +320,6 @@ pub fn process_query<D: EventDatabase>(
         // the OOBI it asks for.
         #[cfg(feature = "oobi")]
         QueryRoute::Oobi { .. } => Err(QueryError::Unsupported("/oobi".into())),
-    }
-}
-
-#[cfg(feature = "mailbox")]
-pub fn process_mailbox_query<D: EventDatabase>(
-    qr: &MailboxRoute,
-    storage: &EventStorage<D>,
-) -> Result<ReplyType, QueryError> {
-    match qr {
-        MailboxRoute::Mbx { args, .. } => {
-            let mail = storage.get_mailbox_messages(args)?;
-            Ok(ReplyType::Mbx(mail))
-        }
     }
 }
 

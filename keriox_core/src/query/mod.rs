@@ -1,6 +1,4 @@
 use crate::event_message::signed_event_message::Message;
-#[cfg(feature = "mailbox")]
-use crate::mailbox::MailboxResponse;
 
 use serde::{Deserialize, Serialize};
 
@@ -18,8 +16,6 @@ pub mod reply_event;
 pub enum ReplyType {
     Ksn(KeyStateNotice),
     Kel(Vec<Message>),
-    #[cfg(feature = "mailbox")]
-    Mbx(MailboxResponse),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]

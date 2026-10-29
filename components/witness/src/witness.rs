@@ -6,9 +6,8 @@ use std::{
 use keri_core::event_message::keri_version::KeriVersion;
 use keri_core::{
     actor::{
-        error::ActorError, parse_exchange_stream, parse_notice_stream, parse_query_stream,
-        parse_reply_stream, possible_response::PossibleResponse, prelude::*, process_reply,
-        process_signed_exn, process_signed_query,
+        error::ActorError, parse_notice_stream, parse_query_stream, parse_reply_stream,
+        possible_response::PossibleResponse, prelude::*, process_reply, process_signed_query,
     },
     database::{
         redb::{RedbDatabase, RedbError},
@@ -22,7 +21,6 @@ use keri_core::{
         signature::Nontransferable,
         signed_event_message::{Notice, SignedNontransferableReceipt},
     },
-    mailbox::MailboxResponse,
     oobi::LocationScheme,
     oobi_manager::{storage::OobiStorageBackend, OobiManager, RedbOobiManager, RedbOobiStorage},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
@@ -31,7 +29,6 @@ use keri_core::{
         notification::{Notification, NotificationBus, Notifier},
     },
     query::{
-        mailbox::{QueryArgsMbx, QueryTopics},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -67,9 +64,7 @@ impl Notifier for WitnessReceiptGenerator {
                 self.storage
                     .events_db
                     .add_receipt_nt(non_trans_receipt.clone(), prefix)?;
-                bus.notify(&Notification::ReceiptAccepted)?;
-                self.storage.add_mailbox_receipt(non_trans_receipt)?;
-                Ok(())
+                bus.notify(&Notification::ReceiptAccepted)
             }
             // Only a designated witness accepts an event before the receipts
             // of the other witnesses; to any other it is a remote event.
@@ -94,7 +89,7 @@ impl WitnessReceiptGenerator {
         events_db: Arc<RedbDatabase>,
         partially_witnessed: Arc<PartiallyWitnessedEscrow<RedbDatabase>>,
     ) -> Self {
-        let storage = EventStorage::new_redb(events_db.clone());
+        let storage = EventStorage::new(events_db.clone());
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         Self {
             prefix,
@@ -202,7 +197,7 @@ impl<S: OobiStorageBackend> Witness<S> {
         let events_db =
             Arc::new(RedbDatabase::new(&events_database_path).map_err(|_| Error::DbError)?);
         let witness_processor = WitnessProcessor::new(events_db.clone(), escrow_config);
-        let event_storage = Arc::new(EventStorage::new_redb(events_db.clone()));
+        let event_storage = Arc::new(EventStorage::new(events_db.clone()));
 
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(
             signer.clone(),
@@ -356,16 +351,11 @@ impl<S: OobiStorageBackend> Witness<S> {
                 if let Some((prefix, sn, kind)) = &described {
                     tracing::warn!(
                         %prefix, sn, %kind, delegator = %id,
-                        "no delegating seal found for this event — parking it in the \
-                         delegator's mailbox instead of receipting it"
+                        "no delegating seal found for this event — not receipting it \
+                         until the delegator's anchoring event is known"
                     );
                 }
-                if let Notice::Event(delegated_event) = notice {
-                    self.event_storage
-                        .add_mailbox_delegate(&id, delegated_event)
-                } else {
-                    Ok(())
-                }
+                Ok(())
             }
             Err(e) => {
                 if let Some((prefix, sn, kind)) = &described {
@@ -380,14 +370,6 @@ impl<S: OobiStorageBackend> Witness<S> {
                 ok
             }
         }
-    }
-
-    pub fn process_exchange(
-        &self,
-        exn: keri_core::mailbox::exchange::SignedExchange,
-    ) -> Result<(), ActorError> {
-        process_signed_exn(exn, &self.event_storage)?;
-        Ok(())
     }
 
     pub fn process_reply(&self, rpy: SignedReply) -> Result<(), ActorError> {
@@ -405,23 +387,6 @@ impl<S: OobiStorageBackend> Witness<S> {
         qry: keri_core::query::query_event::SignedQueryMessage,
     ) -> Result<Option<PossibleResponse>, ActorError> {
         tracing::debug!(?qry, "Processing query");
-        // Mailbox reads are positional and per-identifier, so "who is
-        // being asked about, from which index" is the whole story when
-        // a delegatee waits on a receipt it never receives. The Debug
-        // form above buries it among event digests.
-        if let keri_core::query::query_event::SignedQueryMessage::MailboxQuery(mbx) = &qry {
-            if let keri_core::query::mailbox::MailboxRoute::Mbx { args, .. } =
-                &mbx.query.data.data
-            {
-                tracing::info!(
-                    about = %args.i,
-                    asker = %args.pre,
-                    from_receipt = args.topics.receipt,
-                    from_delegate = args.topics.delegate,
-                    "mailbox query"
-                );
-            }
-        }
         let response = process_signed_query(qry, &self.event_storage)?;
 
         match response {
@@ -441,7 +406,6 @@ impl<S: OobiStorageBackend> Witness<S> {
                 Ok(Some(PossibleResponse::Ksn(reply)))
             }
             ReplyType::Kel(msgs) => Ok(Some(PossibleResponse::Kel(msgs))),
-            ReplyType::Mbx(mailbox_response) => Ok(Some(PossibleResponse::Mbx(mailbox_response))),
         }
     }
 
@@ -478,28 +442,5 @@ impl<S: OobiStorageBackend> Witness<S> {
             self.process_reply(reply)?;
         }
         Ok(())
-    }
-
-    pub fn parse_and_process_exchanges(&self, input_stream: &[u8]) -> Result<(), ActorError> {
-        for exchange in parse_exchange_stream(input_stream)? {
-            self.process_exchange(exchange)?;
-        }
-        Ok(())
-    }
-
-    pub fn get_mailbox_messages(&self, id: &IdentifierPrefix) -> Result<MailboxResponse, Error> {
-        self.event_storage.get_mailbox_messages(&QueryArgsMbx {
-            pre: IdentifierPrefix::Basic(self.prefix.clone()),
-            i: id.clone(),
-            src: IdentifierPrefix::Basic(self.prefix.clone()),
-            topics: QueryTopics {
-                credential: 0,
-                receipt: 0,
-                replay: 0,
-                multisig: 0,
-                delegate: 0,
-                reply: 0,
-            },
-        })
     }
 }

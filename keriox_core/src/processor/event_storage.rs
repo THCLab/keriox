@@ -20,51 +20,19 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState, IdentifierStatus},
 };
-#[cfg(feature = "mailbox")]
-use crate::{database::mailbox::MailboxData, query::mailbox::QueryArgsMbx};
 use crate::{
     database::{EventDatabase, QueryParameters},
     event_message::signed_event_message::SignedEventMessage,
 };
 use said::SelfAddressingIdentifier;
 
-#[cfg(feature = "mailbox")]
-use crate::mailbox::MailboxResponse;
-
 pub struct EventStorage<D: EventDatabase> {
     pub events_db: Arc<D>,
-    #[cfg(feature = "mailbox")]
-    pub mailbox_data: Option<MailboxData>,
 }
 
 impl<D: EventDatabase> EventStorage<D> {
     pub fn new(events_db: Arc<D>) -> Self {
-        Self {
-            events_db,
-            #[cfg(feature = "mailbox")]
-            mailbox_data: None,
-        }
-    }
-}
-
-#[cfg(feature = "mailbox")]
-impl EventStorage<crate::database::redb::RedbDatabase> {
-    pub fn new_redb(events_db: Arc<crate::database::redb::RedbDatabase>) -> Self {
-        let mailbox_data = MailboxData::new(events_db.db.clone()).unwrap();
-        Self {
-            events_db,
-            mailbox_data: Some(mailbox_data),
-        }
-    }
-}
-
-#[cfg(feature = "mailbox")]
-impl<D: EventDatabase> EventStorage<D> {
-    pub fn new_with_mailbox(events_db: Arc<D>, mailbox_data: MailboxData) -> Self {
-        Self {
-            events_db,
-            mailbox_data: Some(mailbox_data),
-        }
+        Self { events_db }
     }
 }
 
@@ -273,82 +241,6 @@ impl<D: EventDatabase> EventStorage<D> {
         } else {
             None
         }
-    }
-
-    #[cfg(feature = "mailbox")]
-    fn mailbox(&self) -> Result<&MailboxData, Error> {
-        self.mailbox_data
-            .as_ref()
-            .ok_or_else(|| Error::SemanticError("Mailbox not initialized".into()))
-    }
-
-    #[cfg(feature = "mailbox")]
-    pub fn add_mailbox_multisig(
-        &self,
-        receipient: &IdentifierPrefix,
-        to_forward: SignedEventMessage,
-    ) -> Result<(), Error> {
-        self.mailbox()?
-            .add_mailbox_multisig(receipient, to_forward)?;
-
-        Ok(())
-    }
-
-    #[cfg(feature = "mailbox")]
-    pub fn add_mailbox_delegate(
-        &self,
-        receipient: &IdentifierPrefix,
-        to_forward: SignedEventMessage,
-    ) -> Result<(), Error> {
-        self.mailbox()?
-            .add_mailbox_delegate(receipient, to_forward)?;
-
-        Ok(())
-    }
-
-    #[cfg(feature = "mailbox")]
-    pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
-        let id = receipt.body.prefix.clone();
-        self.mailbox()?.add_mailbox_receipt(&id, receipt)?;
-
-        Ok(())
-    }
-
-    #[cfg(feature = "mailbox")]
-    pub fn add_mailbox_reply(&self, reply: SignedEventMessage) -> Result<(), Error> {
-        let id = reply.event_message.data.get_prefix();
-        self.mailbox()?.add_mailbox_reply(&id, reply)?;
-
-        Ok(())
-    }
-
-    #[cfg(feature = "mailbox")]
-    pub fn get_mailbox_messages(&self, args: &QueryArgsMbx) -> Result<MailboxResponse, Error> {
-        let mailbox = self.mailbox()?;
-        let id = args.i.clone();
-
-        // query receipts
-        let receipt = match mailbox.get_mailbox_receipts(&id, args.topics.receipt as u64) {
-            Some(receipts) => receipts.collect(),
-            None => vec![],
-        };
-
-        let multisig = match mailbox.get_mailbox_multisig(&id, args.topics.multisig as u64) {
-            Some(multisig) => multisig.collect(),
-            None => vec![],
-        };
-
-        let delegate = match mailbox.get_mailbox_delegate(&id, args.topics.delegate as u64) {
-            Some(delegate) => delegate.collect(),
-            None => vec![],
-        };
-
-        // TODO: query and return the rest of topics
-        Ok(MailboxResponse {
-            receipt,
-            multisig,
-            delegate,
-        })
     }
 
     /// Get last establishment event seal for Prefix

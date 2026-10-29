@@ -115,7 +115,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let processor = BasicProcessor::new(events_db.clone(), Some(notification_bus));
 
-        let storage = Arc::new(EventStorage::new_redb(events_db));
+        let storage = Arc::new(EventStorage::new(events_db));
 
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -369,7 +369,6 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                 Ok(Some(PossibleResponse::Ksn(reply)))
             }
             ReplyType::Kel(msgs) => Ok(Some(PossibleResponse::Kel(msgs))),
-            ReplyType::Mbx(mbx) => Ok(Some(PossibleResponse::Mbx(mbx))),
         }
     }
 
@@ -416,7 +415,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         Ok(())
     }
 
-    /// Forward query to registered witnesses and save its response to mailbox.
+    /// Forward query to registered witnesses and take in their answers.
     /// Fetches events starting from `from_sn` to avoid re-fetching the entire KEL.
     ///
     /// Witnesses are queried in health-priority order: known-healthy ones
@@ -515,10 +514,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                         PossibleResponse::Kel(msgs) => {
                             for msg in msgs {
                                 if let Message::Notice(notice) = msg {
-                                    self.process_notice(notice.clone())?;
-                                    if let Notice::Event(evt) = notice {
-                                        self.event_storage.add_mailbox_reply(evt)?;
-                                    }
+                                    self.process_notice(notice)?;
                                 }
                             }
                             // Did this fill the requested window?
@@ -526,13 +522,6 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                                 .get_state(id)
                                 .map(|s| s.sn >= from_sn)
                                 .unwrap_or(false)
-                        }
-                        PossibleResponse::Mbx(_mbx) => {
-                            tracing::error!(
-                                "Unexpected MBX response from witness {}",
-                                witness_id
-                            );
-                            false
                         }
                     };
                     if satisfied {
@@ -888,10 +877,11 @@ pub(crate) fn logs_query_still_missing(
     }
 }
 
-/// Mailboxes are kept by witnesses, so a watcher refuses mailbox queries.
+/// Forwards are delivered by the application, not kept in mailboxes, so a
+/// watcher refuses mailbox queries.
 pub(crate) fn mailbox_query_refused() -> ActorError {
     ActorError::UnsupportedQuery(
-        "mailboxes are kept by witnesses; send mailbox queries to a witness".into(),
+        "mailboxes are not kept; forwards are delivered by the application".into(),
     )
 }
 

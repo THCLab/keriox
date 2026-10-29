@@ -20,7 +20,7 @@ use said::derivation::{HashFunction, HashFunctionCode};
 use said::version::format::SerializationFormats;
 
 use super::{
-    event_generator, prelude::Message, process_notice, process_signed_exn, process_signed_oobi,
+    event_generator, prelude::Message, process_notice, process_signed_oobi, verify_forward,
 };
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{Exchange, ForwardTopic, SignedExchange};
@@ -367,7 +367,9 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             .map(|message| match message {
                 Message::Notice(notice) => process_notice(notice.to_owned(), &self.processor),
                 Message::Op(op) => match op {
-                    Op::Exchange(exn) => process_signed_exn(exn.to_owned(), &self.storage),
+                    // Forwards are verified, not kept: nothing here holds
+                    // a mailbox.
+                    Op::Exchange(exn) => verify_forward(exn, &self.storage).map(|_| ()),
                     Op::Reply(rpy) => process_signed_oobi(&rpy, &self.oobi_manager, &self.storage),
                     Op::Query(_) => todo!(),
                 },
@@ -619,54 +621,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         let mbx_msg =
             SignedMailboxQuery::new_trans(qry_msg, self.prefix.clone().clone(), signatures);
         SignedQueryMessage::MailboxQuery(mbx_msg)
-    }
-
-    #[cfg(feature = "mailbox")]
-    pub fn query_groups_mailbox(&self, witness: &BasicPrefix) -> Vec<SignedQueryMessage> {
-        use crate::query::mailbox::{MailboxQuery, MailboxRoute, QueryArgsMbx, QueryTopics};
-
-        self.groups
-            .iter()
-            .map(|id| {
-                let qry_msg = MailboxQuery::new_query(
-                    MailboxRoute::Mbx {
-                        args: QueryArgsMbx {
-                            i: id.clone(),
-                            pre: self.prefix.clone(),
-                            src: IdentifierPrefix::Basic(witness.clone()),
-                            topics: QueryTopics {
-                                credential: 0,
-                                receipt: 0,
-                                replay: 0,
-                                multisig: 0,
-                                delegate: 0,
-                                reply: 0,
-                            },
-                        },
-                        reply_route: "".to_string(),
-                    },
-                    &self.prefix,
-                    KeriVersion::V1_0,
-                    SerializationFormats::JSON,
-                    HashFunctionCode::Blake3_256,
-                );
-                let signature = self
-                    .key_manager
-                    .lock()
-                    .unwrap()
-                    .sign(&qry_msg.encode().unwrap())
-                    .unwrap();
-                let signatures = vec![IndexedSignature::new_both_same(
-                    SelfSigningPrefix::Ed25519Sha512(signature),
-                    0,
-                )];
-                SignedQueryMessage::MailboxQuery(SignedMailboxQuery::new_trans(
-                    qry_msg,
-                    self.prefix.clone(),
-                    signatures,
-                ))
-            })
-            .collect()
     }
 
     /// Returns exn message that contains signed multisig event and will be

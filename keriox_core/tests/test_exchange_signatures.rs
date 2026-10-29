@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use keri_core::{
-    actor::{event_generator, process_notice, process_signed_exn},
+    actor::{event_generator, process_notice, verify_forward},
     database::redb::RedbDatabase,
     error::Error,
     event::{sections::threshold::SignatureThreshold, KeyEvent},
@@ -36,7 +36,7 @@ fn setup() -> Fixture {
     Fixture {
         _path: path,
         processor: BasicProcessor::new(db.clone(), None),
-        storage: EventStorage::new_redb(db),
+        storage: EventStorage::new(db),
     }
 }
 
@@ -87,7 +87,7 @@ fn an_exchange_without_sender_signatures_is_refused() {
 
     let unsigned = exchange(&recipient(), &icp, |_| vec![]);
     assert!(matches!(
-        process_signed_exn(unsigned, &fx.storage),
+        verify_forward(&unsigned, &fx.storage),
         Err(Error::MissingSignatures)
     ));
 }
@@ -109,7 +109,7 @@ fn an_empty_sender_signature_group_does_not_verify() {
             )]
         });
         assert!(
-            process_signed_exn(empty, &fx.storage).is_err(),
+            verify_forward(&empty, &fx.storage).is_err(),
             "kt={kt}"
         );
     }
@@ -129,5 +129,5 @@ fn a_signed_exchange_is_accepted() {
             vec![IndexedSignature::new_both_same(sig, 0)],
         )]
     });
-    process_signed_exn(signed, &fx.storage).unwrap();
+    verify_forward(&signed, &fx.storage).unwrap();
 }

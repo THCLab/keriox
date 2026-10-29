@@ -129,10 +129,6 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
                     actix_web::web::post().to(http_handlers::process_reply_redb),
                 )
                 .route(
-                    "/forward",
-                    actix_web::web::post().to(http_handlers::process_exchange_redb),
-                )
-                .route(
                     "/identifiers/{id}/state",
                     actix_web::web::get().to(http_handlers::identifier_state_redb),
                 )
@@ -238,16 +234,13 @@ mod test {
         actor::{
             error::ActorError,
             parse_event_stream, parse_op_stream,
-            possible_response::{parse_response, PossibleResponse},
+            possible_response::PossibleResponse,
         },
         event_message::signed_event_message::{Message, Op},
         oobi::Role,
         oobi_manager::storage::OobiStorageBackend,
         prefix::IdentifierPrefix,
-        query::{
-            self,
-            query_event::{QueryRoute, SignedQueryMessage},
-        },
+        query::query_event::{QueryRoute, SignedQueryMessage},
     };
 
     #[async_trait::async_trait]
@@ -273,9 +266,9 @@ mod test {
                             .map_err(|err| err.0)?;
                     }
                     Op::Exchange(_) => {
-                        super::http_handlers::process_exchange(payload, data)
-                            .await
-                            .map_err(|err| err.0)?;
+                        return Err(ActorError::GeneralError(
+                            "a witness takes no exchanges".into(),
+                        ));
                     }
                 },
             }
@@ -311,16 +304,9 @@ mod test {
                     }
                     QueryRoute::Oobi { .. } => Err(ActorError::UnsupportedQuery("/oobi".into())),
                 },
-                SignedQueryMessage::MailboxQuery(qry) => match qry.query.data.data {
-                    query::mailbox::MailboxRoute::Mbx {
-                        reply_route: _,
-                        args: _,
-                    } => {
-                        let resp = String::from_utf8(resp.to_vec()).unwrap();
-                        let resp = parse_response(&resp).unwrap();
-                        Ok(resp)
-                    }
-                }, // },
+                SignedQueryMessage::MailboxQuery(_) => {
+                    Err(ActorError::UnsupportedQuery("/mbx".into()))
+                }
             }
         }
         async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError> {
@@ -582,34 +568,6 @@ pub mod http_handlers {
             .body(()))
     }
 
-    pub async fn process_exchange<S: OobiStorageBackend>(
-        post_data: String,
-        data: web::Data<Arc<Witness<S>>>,
-    ) -> Result<HttpResponse, ApiError> {
-        tracing::info!("Processing exchange");
-        tracing::debug!(payload = %post_data, "Exchange payload");
-        let outcome = match data.parse_and_process_exchanges(post_data.as_bytes()) {
-            Ok(()) => "ok",
-            Err(e) => {
-                metrics::counter!(
-                    crate::metrics::names::EVENTS_PROCESSED_TOTAL,
-                    "kind" => "exchange", "outcome" => "err"
-                )
-                .increment(1);
-                return Err(e.into());
-            }
-        };
-        metrics::counter!(
-            crate::metrics::names::EVENTS_PROCESSED_TOTAL,
-            "kind" => "exchange", "outcome" => outcome
-        )
-        .increment(1);
-
-        Ok(HttpResponse::Ok()
-            .content_type(ContentType::plaintext())
-            .body(()))
-    }
-
     /// Behaviour a client may depend on, advertised on `/info`.
     /// `abandonment`: events after an abandonment are refused with 410 and
     /// `/identifiers/{id}/state` reports it. `keri2`: KERI 2.0 messages are
@@ -704,13 +662,6 @@ pub mod http_handlers {
         data: web::Data<Arc<Witness<RedbOobiStorage>>>,
     ) -> Result<HttpResponse, ApiError> {
         process_reply(body, data).await
-    }
-
-    pub async fn process_exchange_redb(
-        post_data: String,
-        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
-    ) -> Result<HttpResponse, ApiError> {
-        process_exchange(post_data, data).await
     }
 
     pub async fn resolve_location_redb(

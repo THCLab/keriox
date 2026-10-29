@@ -28,7 +28,7 @@ use std::{
 
 use cesrox::payload::Payload;
 use keri_core::{
-    actor::{process_notice, process_reply, process_signed_exn, process_signed_query},
+    actor::{process_notice, process_reply, process_signed_query, verify_forward},
     database::redb::RedbDatabase,
     event::sections::{
         key_config::{KeyConfig, NextKeysData},
@@ -315,9 +315,7 @@ impl Node {
         Self {
             _file: file,
             processor: BasicProcessor::new(db.clone(), Some(bus)),
-            // With a mailbox, as on a witness: an exchange is only kept
-            // when it reaches one, so without it every exchange would fail.
-            storage: EventStorage::new_redb(db.clone()),
+            storage: EventStorage::new(db.clone()),
             escrows,
             oobi: OobiManager::new(db).unwrap(),
         }
@@ -350,7 +348,7 @@ impl Node {
                 }
                 Message::Op(Op::Exchange(exn)) => {
                     let said = exn.exchange_message.digest().map(|d| d.to_string());
-                    if process_signed_exn(exn, &self.storage).is_ok() {
+                    if verify_forward(&exn, &self.storage).is_ok() {
                         out.accepted_ops.insert(said.unwrap_or_default());
                     }
                 }

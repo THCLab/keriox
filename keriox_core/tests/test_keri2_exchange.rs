@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use keri_core::{
-    actor::{event_generator, parse_op_stream, process_notice, process_signed_exn},
+    actor::{event_generator, parse_op_stream, process_notice, verify_forward},
     database::redb::RedbDatabase,
     event::{sections::seal::EventSeal, KeyEvent},
     event_message::{
@@ -42,7 +42,7 @@ fn setup() -> Fixture {
     Fixture {
         _path: path,
         processor: BasicProcessor::new(db.clone(), None),
-        storage: EventStorage::new_redb(db),
+        storage: EventStorage::new(db),
     }
 }
 
@@ -126,12 +126,12 @@ fn an_exchange_names_its_sender_and_recipient() {
     )));
 
     let signed = through_the_wire(exn, &signer, &icp, &icp).unwrap();
-    process_signed_exn(signed, &fx.storage).unwrap();
+    verify_forward(&signed, &fx.storage).unwrap();
 }
 
 /// A forward names the forwarded body's digest in `a.evt` and carries the
 /// message nested in its attachments, in an attachment group, so it is read
-/// as one message. The mailbox keeps the forwarded event with its
+/// as one message. The recipient takes the forwarded event with its
 /// signatures.
 #[test]
 fn a_forward_carries_the_forwarded_message_nested() {
@@ -164,18 +164,11 @@ fn a_forward_carries_the_forwarded_message_nested() {
     };
     assert_eq!(forwarded.event_message, icp);
 
-    process_signed_exn(read.clone(), &fx.storage).unwrap();
-    let kept: Vec<_> = fx
-        .storage
-        .mailbox_data
-        .as_ref()
-        .unwrap()
-        .get_mailbox_multisig(&recipient, 0)
-        .unwrap()
-        .collect();
-    assert_eq!(kept.len(), 1);
-    assert_eq!(kept[0].event_message, icp);
-    assert_eq!(kept[0].signatures, forwarded.signatures);
+    let taken = verify_forward(read, &fx.storage).unwrap();
+    assert_eq!(taken.recipient, recipient);
+    assert_eq!(taken.topic, ForwardTopic::Multisig);
+    assert_eq!(taken.event.event_message, icp);
+    assert_eq!(taken.event.signatures, forwarded.signatures);
 }
 
 /// A forward without the message `a.evt` names, or with another one, is
@@ -218,7 +211,7 @@ fn an_exchange_signed_by_someone_else_is_refused() {
     // Nor is it taken when handed over without the parser.
     let forged = signed(exn, &other_signer, &other_icp, &sender_icp);
     assert!(matches!(
-        process_signed_exn(forged, &fx.storage),
+        verify_forward(&forged, &fx.storage),
         Err(Error::SemanticError(_))
     ));
 }
@@ -246,7 +239,7 @@ fn a_forward_for_another_recipient_than_ri_is_refused() {
     );
     let exn = through_the_wire(exn, &signer, &icp, &icp).unwrap();
     assert!(matches!(
-        process_signed_exn(exn, &fx.storage),
+        verify_forward(&exn, &fx.storage),
         Err(Error::SemanticError(_))
     ));
 }
@@ -280,10 +273,10 @@ fn a_keri_1_exchange_is_refused() {
 /// nested), as `keri.app.forwarding` builds it.
 const KERIPY_FORWARD: &str = r#"{"v":"KERICAACAAJSONAAEt.","t":"icp","d":"EIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJ","i":"EIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJ","s":"0","kt":"1","k":["DOR1qM4x1Y8fjsgzsAGUNrs4xoB4Nq8pnYExz5Zlob9b"],"nt":"1","n":["EGKHGuVFL8IphnkFXqTD5KFdrbqqiixdjMrMgwbvX--b"],"bt":"0","b":[],"c":[],"a":[]}-CAX-KAWAABzlQkKHQlWu8Kqk8kkyaKTLtCmSVHbYkzCPJuI4_04cqVDd7TBaEk4m91mQ-D0oaYBocUe7G_Vw8MivAVdwVgI{"v":"KERICAACAAJSONAAGJ.","t":"exn","d":"EME5P9wRSi2xyIzcjy0uOOaALIe2eI0VmhHnTM9p9sM2","i":"EIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJ","ri":"EO8m6PSESVVeddChKbExqvrllOeiy5B2gMgcMHS6p_UD","x":"","p":"","dt":"2026-10-27T23:14:25.908929+00:00","r":"/fwd","q":{"pre":"EO8m6PSESVVeddChKbExqvrllOeiy5B2gMgcMHS6p_UD","topic":"multisig"},"a":{"evt":"EA2Wr3knDvyelcSyySV-5qrLSdZ7O8rlnit3hZqtmm0y"}}-CCu-XAuEIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJMAAAEIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJ-KAWAABV1RfKXsh8q0eiHNmChrI5ZjvEXHmhQabaYJoIhN5CbLq5QY996QUscUL2xFy51AvLajKcbS7x1nx_5T0sJVML-BB--HBm6BBlAAB7InYiOiJLRVJJQ0FBQ0FBSlNPTkFBRXQuIiwidCI6ImljcCIsImQiOiJFSW0zcUpzQy1adDlMV2lKR2RfVjdLU0hYeUsyLWNvUGlQak9pQXMwcmx4SiIsImkiOiJFSW0zcUpzQy1adDlMV2lKR2RfVjdLU0hYeUsyLWNvUGlQak9pQXMwcmx4SiIsInMiOiIwIiwia3QiOiIxIiwiayI6WyJET1IxcU00eDFZOGZqc2d6c0FHVU5yczR4b0I0TnE4cG5ZRXh6NVpsb2I5YiJdLCJudCI6IjEiLCJuIjpbIkVHS0hHdVZGTDhJcGhua0ZYcVRENUtGZHJicXFpaXhkak1yTWd3YnZYLS1iIl0sImJ0IjoiMCIsImIiOltdLCJjIjpbXSwiYSI6W119-KAWAABzlQkKHQlWu8Kqk8kkyaKTLtCmSVHbYkzCPJuI4_04cqVDd7TBaEk4m91mQ-D0oaYBocUe7G_Vw8MivAVdwVgI"#;
 
-/// keriox reads keripy's forward and keeps the forwarded inception in the
-/// recipient's mailbox, as keripy's own mailbox does with keriox's.
+/// keriox reads keripy's forward and takes the forwarded inception, as
+/// keripy's own mailbox does with keriox's.
 #[test]
-fn a_forward_written_by_keripy_is_read_and_kept() {
+fn a_forward_written_by_keripy_is_read_and_taken() {
     let fx = setup();
     let messages: Vec<Message> =
         keri_core::event_message::cesr_adapter::parse_cesr_stream_many(KERIPY_FORWARD.as_bytes())
@@ -299,18 +292,9 @@ fn a_forward_written_by_keripy_is_read_and_kept() {
         panic!("no forwarded event: {:?}", exn.nested)
     };
     let recipient = exn.exchange_message.data.recipient.clone();
-    process_signed_exn(exn.clone(), &fx.storage).unwrap();
-
-    let kept: Vec<_> = fx
-        .storage
-        .mailbox_data
-        .as_ref()
-        .unwrap()
-        .get_mailbox_multisig(&recipient, 0)
-        .unwrap()
-        .collect();
-    assert_eq!(kept.len(), 1);
-    assert_eq!(kept[0].event_message, forwarded.event_message);
+    let taken = verify_forward(exn, &fx.storage).unwrap();
+    assert_eq!(taken.recipient, recipient);
+    assert_eq!(taken.event.event_message, forwarded.event_message);
     // Written again, keriox's encoding of it is keripy's.
     assert_eq!(
         String::from_utf8(Message::Op(Op::Exchange(exn.clone())).to_cesr().unwrap()).unwrap(),

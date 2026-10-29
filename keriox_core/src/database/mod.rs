@@ -17,8 +17,6 @@ use crate::{
     state::IdentifierState,
 };
 
-#[cfg(feature = "mailbox")]
-pub mod mailbox;
 pub mod memory;
 #[cfg(feature = "storage-postgres")]
 pub mod postgres;

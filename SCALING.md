@@ -39,7 +39,7 @@ safety.
 | Watcher tracking many witnesses | fine — HTTP-bound, already addressed | irrelevant — it's not a storage problem | step 3 fan-out scales *better* with more witnesses per AID |
 | Watcher tracking many AIDs (≥ 1 M) | bounded by single-host capacity | shared state across replicas, in theory | not implemented for watcher; would require setup_with_postgres + removing block_on |
 | Witness for ≤ ~hundreds of K users | fine | overkill | redb single-writer handles 100s of writes/sec, KEL events are rare |
-| Witness for millions of users, sustained writes | redb single-writer becomes ceiling | could parallelise per-AID writes | not implemented for witness; mailbox is permanently redb (`keriox_core/src/database/mailbox.rs`) |
+| Witness for millions of users, sustained writes | redb single-writer becomes ceiling | could parallelise per-AID writes | not implemented for witness |
 | One operator's HA / PITR / regulated backup | not provided | yes, the strongest case | needs Postgres witness + block_on removal first |
 | Cross-witness data redundancy | already provided by protocol | duplicate of what the protocol gives | only adds value for the single-operator failure modes |
 
@@ -66,7 +66,7 @@ Not:
 ### 1. Controller-side first-tally fan-out (mirrors step 3, on writes)
 
 **Status**: identified during perf testing, not implemented.
-**Why**: `broadcast.rs:216–227` and `identifier/mechanics/query_mailbox.rs`
+**Why**: `broadcast.rs:216–227` and `identifier/mechanics/forwards.rs` (receipt queries)
 use `join_all` and wait for the slowest witness. The perf harness
 showed this clearly: with 4 witnesses, 1 slow at 2 s, identifier
 setup blew up from 0.4 s to 32.5 s for 100 ids.
@@ -77,7 +77,7 @@ receipts have come back, leave the rest pending.
 beyond it is overhead. Witnesses that haven't responded yet still get
 their receipt eventually because the request was launched.
 **Effort**: ~1 day. Touches two files; the perf harness already
-exercises the path via `notify_witnesses` and `query_mailbox`.
+exercises the path via `notify_witnesses` and the receipt queries.
 
 ### 2. Witness pod sharding pattern, documented as a deployment guide
 
@@ -107,15 +107,11 @@ hardware; beyond that you need a different strategy.
 ### 4. Postgres witness implementation (only if 1–3 don't suffice)
 
 **Status**: scaffolding exists in `keriox_core` and `teliox`; no
-`setup_with_postgres` constructor on the witness; mailbox stays redb.
+`setup_with_postgres` constructor on the witness.
 **Required work**:
 - Build `WitnessListener::setup_with_postgres` mirroring the
   redb constructor. `Witness::new` (`components/witness/src/witness.rs:155`)
   takes `RedbDatabase` directly in places — needs decoupling.
-- Decide what to do about the mailbox. Either port to Postgres
-  (large change — new tables, new cleanup logic) or accept that even
-  a Postgres witness writes a per-pod mailbox file and is therefore
-  not stateless.
 - Remove `async_std::task::block_on(...)` wrappers across
   `keriox_core/src/database/postgres/`. Currently every Postgres
   query parks the async runtime; without this, "concurrent writes

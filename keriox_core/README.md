@@ -14,7 +14,7 @@ To use this library, a third-party key provider that derives public-private key 
 - `query`: enables query messages and their processing logic.
 - `oobi`: provides events and logic for the [oobi discovery mechanism](https://weboftrust.github.io/ietf-oobi/draft-ssmith-oobi.html).
 - `oobi-manager`: high-level OOBI management. Implies `oobi`, `query`, and `storage-redb`.
-- `mailbox`: enables the storing of messages intended for other identifiers and provides them to recipients later. This feature is meant for witnesses and watchers. Implies `query` and `storage-redb`.
+- `mailbox`: enables exchange messages, the forwards that carry group events and delegation requests between identifiers, and their verification (`actor::verify_forward`). Nothing keeps forwards for later: the application delivers them, through any channel. Implies `query` and `storage-redb`.
 
 ## Architecture
 
