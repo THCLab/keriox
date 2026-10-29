@@ -6,9 +6,12 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, error::ControllerError, identifier::mechanics::MechanicsError,
-    mailbox_updating::ActionRequired, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix,
-    KeyManager, LocationScheme, Oobi, RedbController, RedbIdentifier, SelfSigningPrefix,
+    config::ControllerConfig,
+    error::ControllerError,
+    identifier::mechanics::{forwards::Forward, MechanicsError},
+    mailbox_updating::ActionRequired,
+    BasicPrefix, CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi,
+    RedbController, RedbIdentifier, SelfSigningPrefix,
 };
 use keri_core::{
     actor::{error::ActorError, prelude::Message},
@@ -21,7 +24,7 @@ use keri_core::{
     prefix::IndexedSignature,
     transport::{default::DefaultTransport, Transport, TransportError},
 };
-use keri_tests::{settings::InfrastructureContext, wait_before_retry};
+use keri_tests::{collect_receipts, settings::InfrastructureContext, wait_before_retry};
 use said::SelfAddressingIdentifier;
 use tempfile::{Builder, TempDir};
 use test_context::test_context;
@@ -38,20 +41,6 @@ fn controller() -> Result<(TempDir, Arc<RedbController>), ControllerError> {
 
 fn sign(km: &CryptoBox, data: &[u8]) -> SelfSigningPrefix {
     SelfSigningPrefix::Ed25519Sha512(km.sign(data).unwrap())
-}
-
-async fn collect_receipts(
-    id: &mut RedbIdentifier,
-    km: &CryptoBox,
-    about: &IdentifierPrefix,
-    witnesses: &[BasicPrefix],
-) -> Result<Vec<ActionRequired>, ControllerError> {
-    let mut actions = vec![];
-    for qry in id.query_mailbox(about, witnesses)? {
-        let signature = sign(km, &qry.encode()?);
-        actions.extend(id.finalize_query_mailbox(vec![(qry, signature)]).await?);
-    }
-    Ok(actions)
 }
 
 /// Incept an identifier with `km`'s keys, witnessed by `witnesses` with
@@ -206,7 +195,7 @@ async fn an_abandoned_identifier_is_final_for_witnesses_and_watchers(
     // A verifier that has never seen the identifier asks its watcher.
     let (_b_root, b_controller) = controller()?;
     let b_km = CryptoBox::new()?;
-    let mut b = incept(&b_controller, &b_km, &[first_witness.clone()], 1).await?;
+    let b = incept(&b_controller, &b_km, &[first_witness.clone()], 1).await?;
     let (watcher_id, watcher) = ctx.watcher_data();
     b.resolve_oobi(&Oobi::Location(watcher.clone())).await?;
     let add_watcher = b.add_watcher(IdentifierPrefix::Basic(watcher_id))?;
@@ -260,14 +249,24 @@ async fn an_abandoned_identifier_is_final_for_witnesses_and_watchers(
     Ok(())
 }
 
-/// The delegator approves every delegation request waiting in its mailbox.
+/// The delegator approves every delegation request among the delivered
+/// `forwards`, and returns the approvals, to deliver to the delegates.
 async fn approve_delegations(
     delegator: &mut RedbIdentifier,
     km: &CryptoBox,
     witnesses: &[BasicPrefix],
-) -> Result<(), ControllerError> {
+    forwards: &[Forward],
+) -> Result<Vec<Forward>, ControllerError> {
     let own = delegator.id().clone();
-    for action in collect_receipts(delegator, km, &own, witnesses).await? {
+    let mut approvals = vec![];
+    for forward in forwards {
+        assert_eq!(&forward.to, delegator.id());
+    }
+    let stream = forwards
+        .iter()
+        .flat_map(|forward| forward.message.clone())
+        .collect::<Vec<_>>();
+    for action in delegator.receive_forwards(&stream).await? {
         match action {
             ActionRequired::DelegationRequest(delegating_event, exn) => {
                 let signature_ixn = sign(km, &delegating_event.encode()?);
@@ -282,23 +281,36 @@ async fn approve_delegations(
                 delegator.notify_witnesses().await?;
                 collect_receipts(delegator, km, &own, witnesses).await?;
                 let exn_signature = delegator.sign_with_index(signature_exn, 0)?;
-                delegator
-                    .finalize_exchange(
-                        &exn.encode()?,
-                        exn_signature,
-                        &delegating_event,
-                        IndexedSignature::new_both_same(signature_ixn, 0),
-                    )
-                    .await?;
+                approvals.push(delegator.finalize_exchange(
+                    &exn.encode()?,
+                    exn_signature,
+                    &delegating_event,
+                    IndexedSignature::new_both_same(signature_ixn, 0),
+                )?);
             }
             ActionRequired::MultisigRequest(_, _) => unreachable!(),
         }
     }
+    Ok(approvals)
+}
+
+/// Deliver the `approvals` to the delegate `member`.
+async fn receive_approvals(
+    member: &mut RedbIdentifier,
+    delegated: &IdentifierPrefix,
+    approvals: &[Forward],
+) -> Result<(), ControllerError> {
+    assert_eq!(approvals.len(), 1);
+    for approval in approvals {
+        assert_eq!(&approval.to, delegated);
+        let actions = member.receive_forwards(&approval.message).await?;
+        assert!(actions.is_empty(), "{actions:?}");
+    }
     Ok(())
 }
 
-/// Hand the delegator's KEL to the delegate's controller, so it can check
-/// the delegator's anchors.
+/// Hand an identifier's KEL to another controller, so it can check the
+/// identifier's anchors and the forwards it sends.
 fn share_kel(
     from: &RedbController,
     to: &RedbController,
@@ -337,7 +349,7 @@ async fn a_delegated_identifier_is_abandoned_with_its_delegators_approval(
         Some(delegator.id().clone()),
     )?;
     let exn_signature = member.sign_with_index(sign(&member_km, exchanges[0].as_bytes()), 0)?;
-    let delegated = member
+    let (delegated, requests) = member
         .finalize_group_incept(
             dip.as_bytes(),
             sign(&member_km, dip.as_bytes()),
@@ -345,9 +357,11 @@ async fn a_delegated_identifier_is_abandoned_with_its_delegators_approval(
         )
         .await?;
 
-    approve_delegations(&mut delegator, &delegator_km, &witness_ids).await?;
+    share_kel(&delegate_controller, &delegator_controller, member.id())?;
+    let approvals =
+        approve_delegations(&mut delegator, &delegator_km, &witness_ids, &requests).await?;
     share_kel(&delegator_controller, &delegate_controller, delegator.id())?;
-    collect_receipts(&mut member, &member_km, &delegated, &witness_ids).await?;
+    receive_approvals(&mut member, &delegated, &approvals).await?;
     collect_receipts(&mut member, &member_km, &delegated, &witness_ids).await?;
     assert_eq!(member.find_state(&delegated)?.sn, 0);
 
@@ -378,7 +392,7 @@ async fn a_delegated_identifier_is_abandoned_with_its_delegators_approval(
     // Only the delegation request: there are no other members.
     assert_eq!(exchanges.len(), 1);
     let exn_signature = member.sign_with_index(sign(&member_km, exchanges[0].as_bytes()), 0)?;
-    member
+    let requests = member
         .finalize_group_event(
             drt.as_bytes(),
             sign(&member_km, drt.as_bytes()),
@@ -386,9 +400,12 @@ async fn a_delegated_identifier_is_abandoned_with_its_delegators_approval(
         )
         .await?;
 
-    approve_delegations(&mut delegator, &delegator_km, &witness_ids).await?;
+    // The delegator checks the request against the member's rotated keys.
+    share_kel(&delegate_controller, &delegator_controller, member.id())?;
+    let approvals =
+        approve_delegations(&mut delegator, &delegator_km, &witness_ids, &requests).await?;
     share_kel(&delegator_controller, &delegate_controller, delegator.id())?;
-    collect_receipts(&mut member, &member_km, &delegated, &witness_ids).await?;
+    receive_approvals(&mut member, &delegated, &approvals).await?;
     collect_receipts(&mut member, &member_km, &delegated, &witness_ids).await?;
 
     let state = member.find_state(&delegated)?;

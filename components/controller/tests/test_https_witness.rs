@@ -58,8 +58,9 @@ async fn an_https_only_witness_receipts_the_inception() {
     let mut identifier = controller.finalize_incept(icp.as_bytes(), &sig).unwrap();
     identifier.notify_witnesses().await.unwrap();
 
+    let id = identifier.id().clone();
     let queries = identifier
-        .query_mailbox(identifier.id(), &[witness_id])
+        .query_receipts(&id, &[witness_id])
         .unwrap()
         .into_iter()
         .map(|qry| {
@@ -67,7 +68,8 @@ async fn an_https_only_witness_receipts_the_inception() {
             (qry, SelfSigningPrefix::Ed25519Sha512(sig))
         })
         .collect();
-    identifier.finalize_query_mailbox(queries).await.unwrap();
+    let errors = identifier.finalize_query_receipts(queries).await.unwrap();
+    assert!(errors.is_empty(), "{errors:?}");
 
     let state = identifier.find_state(identifier.id()).unwrap();
     assert_eq!(

@@ -32,7 +32,7 @@ async fn p256_one_of_one_multisig_incept_and_rotate() {
     let alice_prefix = member_id.id().clone();
 
     // 2. Form a 1-of-1 group whose lone member is Alice.
-    let group_prefix = store
+    let (group_prefix, _invitations) = store
         .create_multisig_group(
             "g",
             "alice",

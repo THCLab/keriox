@@ -1,5 +1,5 @@
 use keri_controller::{error::ControllerError, BasicPrefix, KeyManager, SelfSigningPrefix};
-use keri_tests::{settings::InfrastructureContext, setup_identifier};
+use keri_tests::{collect_receipts, settings::InfrastructureContext, setup_identifier};
 use tempfile::Builder;
 use test_context::test_context;
 
@@ -47,19 +47,11 @@ async fn test_witness_rotation(ctx: &mut InfrastructureContext) -> Result<(), Co
     assert_ne!(&state.witness_config.witnesses, cached_witnesses);
 
     identifier.notify_witnesses().await.unwrap();
-    // Querying mailbox to get receipts
-    for qry in identifier
-        .query_mailbox(identifier.id(), &cached_witnesses)
-        .unwrap()
-    {
-        let signature = SelfSigningPrefix::Ed25519Sha512(
-            controller_keypair.sign(&qry.encode().unwrap()).unwrap(),
-        );
-        let _act = identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await
-            .unwrap();
-    }
+    // Asking the witnesses for the KEL to get receipts
+    let id = identifier.id().clone();
+    collect_receipts(&mut identifier, &controller_keypair, &id, &cached_witnesses)
+        .await
+        .unwrap();
 
     let state = identifier.find_state(identifier.id())?;
     assert_eq!(state.sn, 1);

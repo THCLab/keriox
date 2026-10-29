@@ -197,11 +197,19 @@ impl Identity {
     ///
     /// This cannot be undone. Afterwards, remove the local keys and data
     /// with [`crate::Keri::remove_identity`].
-    pub async fn abandon(&self) -> Result<()> {
+    ///
+    /// A delegated identity's abandonment needs its delegator's approval:
+    /// the first call returns the request to deliver to the delegator, and
+    /// once its approval has been taken in with [`Identity::receive`], a
+    /// second call completes it. Until then a call fails with a
+    /// pending-approval error. For any other identity nothing is returned.
+    pub async fn abandon(&self) -> Result<Vec<crate::Outgoing>> {
         match &self.keys {
             // Not retried: once the event is accepted, a retry could only
             // fail because the identity is already abandoned.
-            Keys::Software => Ok(self.keri.store.abandon(&self.alias).await?),
+            Keys::Software => Ok(crate::delivery::direct(
+                self.keri.store.abandon(&self.alias).await?,
+            )),
             #[cfg(feature = "keyprovider")]
             Keys::Provider { .. } => Err(Error::InvalidInput {
                 expected: "software-keyed identity for abandon()",
@@ -489,35 +497,33 @@ impl Identity {
         Ok(kel)
     }
 
-    /// Check this identity's witness mailbox for requests from other
-    /// parties (delegation requests, group invitations) that need action.
+    /// Take a message another identity sent this one (an [`crate::Outgoing`]
+    /// they delivered): a group invitation or a group event to co-sign, a
+    /// delegation request, or a delegation approval. Returns the requests
+    /// that need this identity's decision; an empty list when the message
+    /// needs none (an approval or a co-signature is taken in as it is).
     ///
-    /// Multi-party flows arrive here: the other side starts a flow, you
-    /// poll, inspect, and approve. Returns an empty list when nothing is
-    /// waiting.
-    pub async fn pending_requests(&self) -> Result<Vec<crate::requests::PendingRequest>> {
+    /// The sender's key history must be known to this store
+    /// ([`crate::Keri::import_contact`]).
+    pub async fn receive(&self, message: &[u8]) -> Result<Vec<crate::requests::PendingRequest>> {
         // Multi-party events reference the other parties' *current* keys,
         // so bring imported contacts up to date (best effort) and make
-        // their histories available to this identity's database before
-        // processing the mailbox.
+        // their histories available to this identity's database first.
         let keri = crate::Keri::from_inner(self.keri.clone());
         keri.refresh_contacts().await;
-        for alias in self.keri.contact_alias_names() {
-            if let Ok(contact) = self.keri.store.load(&alias) {
-                let _ = self.keri.copy_kel_into(&self.alias, contact.id());
+        for alias in self.keri.all_kel_aliases() {
+            if alias == self.alias {
+                continue;
+            }
+            if let Ok(known) = self.keri.store.load(&alias) {
+                let _ = self.keri.copy_kel_into(&self.alias, known.id());
             }
         }
 
-        let advanced_requests = match &self.keys {
-            Keys::Software => {
-                let signer = self.keri.store.load_signer(&self.alias)?;
-                self.poll_requests_with(signer).await?
-            }
-            #[cfg(feature = "keyprovider")]
-            Keys::Provider { current, .. } => self.poll_requests_with(current.clone()).await?,
-        };
-
-        Ok(advanced_requests
+        let mut identifier = self.keri.store.load(&self.alias)?;
+        let requests =
+            crate::advanced::operations::receive_forwards(&mut identifier, message).await?;
+        Ok(requests
             .into_iter()
             .map(|request| match request {
                 crate::advanced::types::PendingRequest::Delegation(inner) => {
@@ -536,27 +542,6 @@ impl Identity {
                 }
             })
             .collect())
-    }
-
-    async fn poll_requests_with<S>(
-        &self,
-        signer: S,
-    ) -> Result<Vec<crate::advanced::types::PendingRequest>>
-    where
-        S: crate::advanced::operations::SigningBackend + Clone + 'static,
-    {
-        crate::retry::with_retry(&self.keri.retry, || {
-            let signer = signer.clone();
-            async move {
-                let mut identifier = self.keri.store.load(&self.alias)?;
-                Ok(crate::advanced::operations::poll_pending_requests(
-                    &mut identifier,
-                    &signer,
-                )
-                .await?)
-            }
-        })
-        .await
     }
 
     /// A shareable OOBI URL: hand this string to anyone who should be able
@@ -919,12 +904,11 @@ impl IdentityBuilder {
     /// Create a delegated identity and send the delegation request to the
     /// delegator (step 1 of 3).
     ///
-    /// The delegator finds the request via
-    /// [`crate::Identity::pending_requests`] and approves it; afterwards
-    /// call [`crate::DelegationHandle::finalize`] on the returned handle.
-    /// Requires [`delegated_by`](Self::delegated_by) and at least one
-    /// witness shared with the delegator (the request travels through the
-    /// witness mailbox).
+    /// Deliver the handle's [`requests`](crate::DelegationHandle::requests)
+    /// to the delegator, who takes them with [`crate::Identity::receive`]
+    /// and approves; then call [`crate::DelegationHandle::finalize`] with
+    /// the approval it delivers back. Requires
+    /// [`delegated_by`](Self::delegated_by) and at least one witness.
     pub async fn build_delegation_request(self) -> Result<crate::requests::DelegationHandle> {
         let Some(delegator) = self.delegator.clone() else {
             return Err(Error::InvalidInput {
@@ -945,8 +929,7 @@ impl IdentityBuilder {
         if witnesses.is_empty() {
             return Err(Error::InvalidInput {
                 expected: "at least one witness",
-                cause: "delegation requests travel through the witness mailbox; add .witness(url)"
-                    .into(),
+                cause: "a delegated identity's events are witnessed; add .witness(url)".into(),
             });
         }
         let mut watchers = vec![];
@@ -964,7 +947,7 @@ impl IdentityBuilder {
             watchers,
             algorithm: self.algorithm.into(),
         };
-        let (_temp_id, delegated_prefix, _signer) = self
+        let (_temp_id, delegated_prefix, _signer, forwards) = self
             .keri
             .store
             .create_delegated(&self.alias, config)
@@ -975,6 +958,7 @@ impl IdentityBuilder {
             alias: self.alias,
             delegated: delegated_prefix,
             delegator: delegator.into_prefix(),
+            requests: crate::delivery::direct(forwards),
         })
     }
 

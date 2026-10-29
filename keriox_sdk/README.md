@@ -75,7 +75,7 @@ let verified = keri.verify(their_signed_message)?;
 | hand credentials over and acknowledge them (IPEX) | `Identity::grant`, `Identity::receive_grant`, `Identity::admit`, `Identity::receive_admit` |
 | verify strangers | `Identity::oobi_url` / `Identity::kel` + `Keri::import_contact` |
 | device backup / recovery | `Identity::export`, `IdentityBuilder::restore_from` |
-| delegate (phone acts under your main identity) | `IdentityBuilder::delegated_by`, `Identity::pending_requests` |
+| delegate (phone acts under your main identity) | `IdentityBuilder::delegated_by`, `Identity::receive` |
 | group identities (multisig) | `Identity::new_group`, `Keri::group` |
 | hardware keys (mobile keystore / HSM) | `IdentityBuilder::key_providers` (feature `keyprovider`) |
 | anything lower-level | the [`advanced`](src/advanced/mod.rs) module |

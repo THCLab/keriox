@@ -41,7 +41,7 @@ use keri_core::{
 use crate::advanced::{
     controller::Controller,
     error::{Error, Result},
-    identifier::Identifier,
+    identifier::{Forward, Identifier},
     meta::MetaDb,
     operations::{
         abandon_group, create_identifier_with_controller, create_multisig, rotate_group,
@@ -389,39 +389,52 @@ impl KeriStore {
     /// Witnesses are notified and receipts collected before this returns.
     ///
     /// Afterwards the revealed key is the alias's only seed: it can still
-    /// sign mailbox queries, but nothing it signs speaks for the identifier.
+    /// sign receipt queries, but nothing it signs speaks for the identifier.
     /// Destroy it with [`KeriStore::remove_alias`] once nothing more is
     /// needed from the witnesses.
     ///
     /// # Errors
     /// - [`Error::IdentifierAbandoned`] if it already is.
     /// - Propagates errors from [`crate::advanced::operations::abandon`].
-    pub async fn abandon(&self, alias: &str) -> Result<()> {
+    pub async fn abandon(&self, alias: &str) -> Result<Vec<Forward>> {
         self.abandon_with(alias, AbandonConfig::default()).await
     }
 
     /// Like [`KeriStore::abandon`], with witness changes or anchored seals.
     ///
     /// A delegated identifier's abandonment needs its delegator's approval:
-    /// the first call submits it and fails with
-    /// [`Error::AbandonmentAwaitingApproval`]; once the delegator has
-    /// approved, call it again to collect the result (`config` is then
-    /// ignored).
+    /// the first call returns the request to deliver to the delegator; once
+    /// its approval has been taken in (`receive_forwards`), call it again to
+    /// complete the abandonment (`config` is then ignored). Until then a
+    /// call fails with [`Error::AbandonmentAwaitingApproval`].
     ///
     /// # Errors
     /// Same as [`KeriStore::abandon`].
-    pub async fn abandon_with(&self, alias: &str, config: AbandonConfig) -> Result<()> {
+    pub async fn abandon_with(&self, alias: &str, config: AbandonConfig) -> Result<Vec<Forward>> {
         if self.read_meta(alias, ABANDONMENT_PENDING)?.is_some() {
-            return self.complete_abandonment(alias).await;
+            self.complete_abandonment(alias).await?;
+            return Ok(vec![]);
         }
         self.refuse_abandoned(alias)?;
         let signer = self.load_next_signer(alias)?;
-        let said = self.abandon_with_signer(alias, signer, config).await?;
+        let (said, awaiting) = self.abandon_with_signer(alias, signer, config).await?;
         if self.load(alias)?.is_abandoned() {
-            self.retire_next_seed(alias)
-        } else {
-            self.write_file(alias, ABANDONMENT_PENDING, &said.to_string())?;
-            Err(self.awaiting_approval(alias)?)
+            self.retire_next_seed(alias)?;
+            return Ok(vec![]);
+        }
+        self.write_file(alias, ABANDONMENT_PENDING, &said.to_string())?;
+        match awaiting {
+            Some(awaiting) => {
+                let id = self.load(alias)?;
+                let request = crate::advanced::operations::delegation_request(
+                    &id,
+                    &self.load_signer(alias)?,
+                    &self.load_delegator(alias)?,
+                    &awaiting,
+                )?;
+                Ok(vec![request])
+            }
+            None => Err(self.awaiting_approval(alias)?),
         }
     }
 
@@ -445,7 +458,7 @@ impl KeriStore {
         old_alias: &str,
         new_alias: &str,
         config: IdentifierConfig,
-    ) -> Result<(Identifier, Arc<Signer>)> {
+    ) -> Result<(Identifier, Arc<Signer>, Vec<Forward>)> {
         self.refuse_abandoned(old_alias)?;
         let (successor, signer) = self.create(new_alias, config).await?;
         let inception = match successor.id() {
@@ -457,15 +470,16 @@ impl KeriStore {
             }
         };
         let seal = Seal::Event(EventSeal::new(successor.id().clone(), 0, inception));
-        self.abandon_with(
-            old_alias,
-            AbandonConfig {
-                anchors: vec![seal],
-                ..AbandonConfig::default()
-            },
-        )
-        .await?;
-        Ok((successor, signer))
+        let forwards = self
+            .abandon_with(
+                old_alias,
+                AbandonConfig {
+                    anchors: vec![seal],
+                    ..AbandonConfig::default()
+                },
+            )
+            .await?;
+        Ok((successor, signer, forwards))
     }
 
     /// An [`IdentifierConfig`] with the witnesses and witness threshold of
@@ -499,23 +513,18 @@ impl KeriStore {
     }
 
     /// Picks up a delegated identifier's abandonment once its delegator has
-    /// anchored it: the delegator's approval and the witness receipts both
-    /// arrive through the mailbox.
+    /// anchored it: the delegator's approval has been delivered and taken in
+    /// (`receive_forwards`), and the witness receipts are collected here.
     async fn complete_abandonment(&self, alias: &str) -> Result<()> {
-        use crate::advanced::operations::query_mailbox;
+        use crate::advanced::operations::collect_receipts;
 
         let said: SelfAddressingIdentifier = self
             .read_file(alias, ABANDONMENT_PENDING)?
             .parse()
             .map_err(|_| Error::PersistenceError("invalid pending abandonment".into()))?;
         let mut id = self.load(alias)?;
+        let own = id.id().clone();
         let witnesses = id.find_state(id.id())?.witness_config.witnesses;
-        // The delegator's approval arrives in the mailbox, which the
-        // witnesses still guard with the old keys.
-        let old_keys = self.load_signer(alias)?;
-        for witness in &witnesses {
-            query_mailbox(&mut id, old_keys.clone(), witness).await?;
-        }
         // The witnesses only held the `drt` for the delegator: send it again
         // with the anchoring seal, then collect the receipts it now gets,
         // under the revealed key.
@@ -524,7 +533,7 @@ impl KeriStore {
         }
         let revealed = self.load_next_signer(alias)?;
         for witness in &witnesses {
-            query_mailbox(&mut id, revealed.clone(), witness).await?;
+            collect_receipts(&mut id, &revealed, &own, witness).await?;
         }
         if !self.load(alias)?.is_abandoned() {
             return Err(self.awaiting_approval(alias)?);
@@ -569,7 +578,8 @@ impl KeriStore {
         alias: &str,
         signer: S,
         config: AbandonConfig,
-    ) -> Result<SelfAddressingIdentifier> {
+    ) -> Result<(SelfAddressingIdentifier, Option<crate::advanced::operations::AwaitingDelegator>)>
+    {
         let mut id = self.load(alias)?;
         crate::advanced::operations::abandon(&mut id, signer, config).await
     }
@@ -686,7 +696,7 @@ impl KeriStore {
         &self,
         alias: &str,
         config: DelegationConfig,
-    ) -> Result<(Identifier, IdentifierPrefix, Arc<Signer>)> {
+    ) -> Result<(Identifier, IdentifierPrefix, Arc<Signer>, Vec<Forward>)> {
         let current_seed = crate::advanced::keys::generate_seed(config.algorithm)?;
         let next_seed = crate::advanced::keys::generate_seed(config.algorithm)?;
 
@@ -700,7 +710,7 @@ impl KeriStore {
 
         let delegator_id = config.delegator.clone();
         let controller = self.get_or_create_controller(db_path)?;
-        let (temp_id, delegated_prefix) =
+        let (temp_id, delegated_prefix, forwards) =
             crate::advanced::operations::request_delegation_with_controller(
                 &controller,
                 signer.clone(),
@@ -717,7 +727,7 @@ impl KeriStore {
         self.write_file(alias, "delegated_id", &delegated_prefix.to_str())?;
         self.write_file(alias, "delegator_id", &delegator_id.to_str())?;
 
-        Ok((temp_id, delegated_prefix, signer))
+        Ok((temp_id, delegated_prefix, signer, forwards))
     }
 
     /// Persist the delegator identifier for an alias.
@@ -783,7 +793,8 @@ impl KeriStore {
     /// [`crate::advanced::operations::accept_multisig`], and all participants must call
     /// [`crate::advanced::operations::sync_multisig`] to finalise.
     ///
-    /// Returns the group `IdentifierPrefix`.
+    /// Returns the group `IdentifierPrefix` and the invitations to deliver
+    /// to the other members.
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
@@ -793,16 +804,16 @@ impl KeriStore {
         group_alias: &str,
         member_alias: &str,
         config: MultisigConfig,
-    ) -> Result<IdentifierPrefix> {
+    ) -> Result<(IdentifierPrefix, Vec<Forward>)> {
         let mut id = self.load(member_alias)?;
         let signer = self.load_signer(member_alias)?;
 
         let members = config.members.clone();
-        let group_prefix = create_multisig(&mut id, &signer, config).await?;
+        let (group_prefix, forwards) = create_multisig(&mut id, &signer, config).await?;
 
         self.persist_group_metadata(group_alias, &group_prefix, &members, member_alias)?;
 
-        Ok(group_prefix)
+        Ok((group_prefix, forwards))
     }
 
     /// Rotate an established multisig group identifier.
@@ -811,7 +822,7 @@ impl KeriStore {
     /// storage by `group_alias`, calls [`crate::advanced::operations::rotate_group`],
     /// and rewrites the `participants` file with the post-rotation set on
     /// success. The caller does not have to handle signing, exchange
-    /// messages, mailbox queries, or KERI event types directly.
+    /// messages, receipt queries, or KERI event types directly.
     ///
     /// **Precondition:** the caller's individual KEL for `member_alias`
     /// must already be rotated locally so that the member's *current*
@@ -846,7 +857,7 @@ impl KeriStore {
         &self,
         group_alias: &str,
         config: GroupRotationConfig,
-    ) -> Result<()> {
+    ) -> Result<Vec<Forward>> {
         let member_alias = self.load_multisig_member_alias(group_alias)?;
         let group_id = self.load_multisig_prefix(group_alias)?;
 
@@ -858,10 +869,10 @@ impl KeriStore {
         let signer = self.load_signer(&member_alias)?;
 
         let new_members = config.new_participants.clone();
-        rotate_group(&mut id, &signer, &group_id, config).await?;
+        let forwards = rotate_group(&mut id, &signer, &group_id, config).await?;
 
         self.persist_group_metadata(group_alias, &group_id, &new_members, &member_alias)?;
-        Ok(())
+        Ok(forwards)
     }
 
     /// Abandon a multisig group identifier (initiator side), following
@@ -877,7 +888,7 @@ impl KeriStore {
         &self,
         group_alias: &str,
         config: GroupAbandonConfig,
-    ) -> Result<()> {
+    ) -> Result<Vec<Forward>> {
         let member_alias = self.load_multisig_member_alias(group_alias)?;
         let group_id = self.load_multisig_prefix(group_alias)?;
         let mut id = self.load(&member_alias)?;

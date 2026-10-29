@@ -17,7 +17,7 @@ cover.
 | rotate my keys | `identity.rotate().await` |
 | add/remove witnesses while rotating | `advanced::KeriStore::rotate_with` + `StoreRotationConfig` |
 | create from a deterministic seed (mnemonic) | `advanced::KeriStore::create_with_seeds` |
-| end an identity for good | `identity.abandon().await` (`abandon_with_provider` for provider keys; a delegated identity returns `PendingApproval` until its delegator approves, then call it again) |
+| end an identity for good | `identity.abandon().await` (`abandon_with_provider` for provider keys; a delegated identity returns the request for its delegator; once the approval is received, call it again) |
 | check whether an identity is abandoned | `identity.is_abandoned()`; for anyone else's, its state after `import_contact` (`advanced::Identifier::find_status`) |
 | destroy an identity's keys and local data | `keri.remove_identity("alias")` |
 | check that my witnesses/watchers enforce abandonment | `advanced::supports_abandonment(&url).await` |
@@ -46,7 +46,7 @@ cover.
 | revoke one I issued | `identity.revoke(&id).await` (returns the revoked presentation) |
 | the current presentation of one I issued | `identity.presentation(&id)` |
 | list what I've issued | `identity.credentials()` |
-| issue from a group | `group.issue(schema, attributes).await` |
+| issue from a group | `group.issue(schema, attributes).await` (deliver the co-signing messages it returns) |
 | hand it to someone (IPEX grant) | `identity.grant(&presentation, &their_id, "message")`, deliver the bytes |
 | receive a granted credential | `identity.receive_grant(&grant)` (verifies the sender, judges the credential) |
 | acknowledge a grant (IPEX admit) | `identity.admit(&grant, "message")`, then `identity.receive_admit(&admit)` on the other side |
@@ -64,10 +64,11 @@ cover.
 | I want to… | Call |
 |---|---|
 | delegate a sub-identity (phone, service) | `keri.new_identity("phone").witness(url).delegated_by(&main_id).build_delegation_request().await` |
-| see & approve requests addressed to me | `identity.pending_requests().await` → `request.approve()` / `accept_as(alias)` |
-| finish my side of a delegation | `handle.finalize().await` (recover the handle after restart with `keri.delegation_in_progress`) |
-| start a group identity | `identity.new_group("team").member(&id).threshold(n).initiate().await` |
-| join one | `pending_requests()` → `GroupRequest::accept_as("team")` |
+| deliver a delegation request | `handle.requests()` — send each `Outgoing` to its `to` |
+| see & approve requests sent to me | `identity.receive(&message).await` → `request.approve()` / `accept_as(alias)`, then deliver what they return |
+| finish my side of a delegation | `handle.finalize(&approval).await` (recover the handle after restart with `keri.delegation_in_progress`) |
+| start a group identity | `identity.new_group("team").member(&id).threshold(n).initiate().await`, then deliver `invite.invitations()` |
+| join one | `receive(&invitation)` → `GroupRequest::accept_as("team")`, then deliver its messages |
 | use the group later | `keri.group("team")`, then `sign` / `issue` / `rotate` / `sync` |
 | out-of-band (witness-less) delegation | `advanced::operations::{build_delegation_request, build_delegation_approval, finalize_delegation_with_seal}` |
 | weighted thresholds, mixed-curve groups | `advanced::` only (`SignatureThreshold::Weighted`, per-member configs) |

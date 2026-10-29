@@ -79,7 +79,7 @@ async fn test_oob_delegation_single_aid_delegator() {
     let mut alice_mut = dlg_store.load("alice").unwrap();
     ingest_kel(&bob_id, &alice_mut);
 
-    let signed_ixn_cesr = operations::build_delegation_approval(
+    let (signed_ixn_cesr, _forwards) = operations::build_delegation_approval(
         &mut alice_mut,
         &alice_signer,
         &alice_prefix,
@@ -124,7 +124,7 @@ async fn test_oob_delegation_one_of_one_group_delegator() {
         .unwrap();
     let alice_prefix = alice_id.id().clone();
 
-    let group_prefix = dlg_store
+    let (group_prefix, _invitations) = dlg_store
         .create_multisig_group(
             "g",
             "alice",
@@ -162,7 +162,7 @@ async fn test_oob_delegation_one_of_one_group_delegator() {
     ingest_kel(&bob_id, &alice_mut);
 
     let alice_signer = dlg_store.load_signer("alice").unwrap();
-    let signed_ixn_cesr = operations::build_delegation_approval(
+    let (signed_ixn_cesr, _forwards) = operations::build_delegation_approval(
         &mut alice_mut,
         &alice_signer,
         &group_prefix,
@@ -200,7 +200,7 @@ async fn test_anchor_group_one_of_one() {
         .unwrap();
     let alice_prefix = alice_id.id().clone();
 
-    let group_prefix = store
+    let (group_prefix, _invitations) = store
         .create_multisig_group(
             "g",
             "alice",
@@ -253,7 +253,7 @@ async fn test_anchor_group_sequential() {
         .await
         .unwrap();
     let alice_prefix = alice_id.id().clone();
-    let group_prefix = store
+    let (group_prefix, _invitations) = store
         .create_multisig_group(
             "g",
             "alice",
@@ -319,7 +319,7 @@ async fn test_multisig_request_from_cesr_roundtrip() {
     ingest_kel(&b, &a);
     ingest_kel(&a, &b);
 
-    let group_prefix = store_a
+    let (group_prefix, _invitations) = store_a
         .create_multisig_group(
             "g",
             "a",

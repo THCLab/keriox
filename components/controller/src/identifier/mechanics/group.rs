@@ -22,7 +22,7 @@ use teliox::registry::RegistryStore;
 
 use crate::identifier::Identifier;
 
-use super::MechanicsError;
+use super::{forwards::Forward, MechanicsError};
 
 impl<D, T, S> Identifier<D, T, S>
 where
@@ -404,13 +404,14 @@ where
         Ok((serialized_ixn, exchanges))
     }
 
-    /// Finalizes group identifier.
+    /// Finalizes group identifier. Returns the group's prefix and the
+    /// forwards to deliver to the other participants (and the delegator).
     pub async fn finalize_group_incept(
         &mut self,
         group_event: &[u8],
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, Signature)>,
-    ) -> Result<IdentifierPrefix, MechanicsError> {
+    ) -> Result<(IdentifierPrefix, Vec<Forward>), MechanicsError> {
         // Join icp event with signature
         let key_event =
             parse_event_type(group_event).map_err(|_e| MechanicsError::EventFormatError)?;
@@ -425,17 +426,17 @@ where
             return Err(MechanicsError::WrongEventTypeError);
         };
         let group_prefix = ke.data.get_prefix();
-        self.finalize_event(&ke, sig, exchanges).await?;
-        Ok(group_prefix)
+        let forwards = self.finalize_event(&ke, sig, exchanges).await?;
+        Ok((group_prefix, forwards))
     }
 
-    /// Finalizes group event.
+    /// Finalizes group event. Returns the forwards to deliver.
     pub async fn finalize_group_event(
         &mut self,
         group_event: &[u8],
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, Signature)>,
-    ) -> Result<(), MechanicsError> {
+    ) -> Result<Vec<Forward>, MechanicsError> {
         // Join icp event with signature
         let key_event =
             parse_event_type(group_event).map_err(|_e| MechanicsError::EventFormatError)?;
@@ -444,8 +445,7 @@ where
         } else {
             return Err(MechanicsError::WrongEventTypeError);
         };
-        self.finalize_event(&ke, sig, exchanges).await?;
-        Ok(())
+        self.finalize_event(&ke, sig, exchanges).await
     }
 
     /// Finalizes group event.
@@ -455,7 +455,7 @@ where
         key_event: &KeriEvent<KeyEvent>,
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, Signature)>,
-    ) -> Result<(), MechanicsError> {
+    ) -> Result<Vec<Forward>, MechanicsError> {
         let own_index = self.get_index(&key_event.data)?;
 
         self.known_events
@@ -478,23 +478,25 @@ where
 
         let att_signature = IndexedSignature::new_both_same(sig, own_index as u16);
 
-        for (exn, signature) in exchanges {
-            self.finalize_exchange(&exn, signature, key_event, att_signature.clone())
-                .await?;
-        }
-        Ok(())
+        exchanges
+            .into_iter()
+            .map(|(exn, signature)| {
+                self.finalize_exchange(&exn, signature, key_event, att_signature.clone())
+            })
+            .collect()
     }
 
-    /// Sends the forward `exchange`, signed with `exn_signature`, to a
-    /// witness, with `forwarded`, the event it forwards, nested in it:
-    /// signed with `data_signature` and with the receipts known for it.
-    pub async fn finalize_exchange(
+    /// The forward `exchange`, signed with `exn_signature`, with
+    /// `forwarded`, the event it forwards, nested in it: signed with
+    /// `data_signature` and with the receipts known for it. Deliver it to
+    /// the identifier it is for.
+    pub fn finalize_exchange(
         &self,
         exchange: &[u8],
         exn_signature: Signature,
         forwarded: &KeriEvent<KeyEvent>,
         data_signature: IndexedSignature,
-    ) -> Result<(), MechanicsError> {
+    ) -> Result<Forward, MechanicsError> {
         let parsed_exn =
             parse_event_type(exchange).map_err(|_e| MechanicsError::EventFormatError)?;
         if let EventType::Exn(exn) = parsed_exn {
@@ -512,37 +514,18 @@ where
                 .map(|receipts| receipts.signatures);
             let forwarded_event = to_forward.sign(vec![data_signature], receipts, None);
 
-            let signer_exn = Message::Op(Op::Exchange(SignedExchange::forward(
+            let recipient = exn.data.recipient.clone();
+            let signed = Message::Op(Op::Exchange(SignedExchange::forward(
                 exn,
                 vec![exn_signature],
                 Message::Notice(Notice::Event(forwarded_event)),
             )));
-            // `get_state_at_event` re-applies the forwarded event to the
-            // local state, which returns DuplicateError when the event has
-            // already been finalized (the common case during group
-            // rotations). Fall back to the post-application state — its
-            // witness config already reflects the event.
-            let wits = match self.known_events.get_state_at_event(&to_forward) {
-                Ok(state) => state.witness_config.witnesses,
-                Err(_) => self
-                    .known_events
-                    .storage
-                    .get_state(&to_forward.data.get_prefix())
-                    .map(|st| st.witness_config.witnesses)
-                    .unwrap_or_default(),
-            };
-            // TODO for now get first witness
-            if let Some(wit) = wits.first() {
-                self.communication
-                    .send_message_to(
-                        IdentifierPrefix::Basic(wit.clone()),
-                        signer_exn,
-                    )
-                    .await?;
-            }
-            Ok(())
+            Ok(Forward {
+                to: recipient,
+                message: signed.to_cesr()?,
+            })
         } else {
-            Ok(())
+            Err(MechanicsError::WrongEventTypeError)
         }
     }
 }

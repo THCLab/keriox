@@ -9,7 +9,8 @@
 use keri_sdk::advanced::{
     // Compound operations dkms-bin drives directly.
     operations::{
-        accept_multisig_event, create_multisig, poll_group_requests, poll_pending_requests,
+        accept_multisig_event, collect_receipts, create_multisig, delegation_request,
+        receive_forwards,
     },
     // Credentials and their registries.
     registry::{issue, issue_group, presentation, revoke, update, verify},

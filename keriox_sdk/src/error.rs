@@ -81,7 +81,7 @@ pub enum Error {
     },
 
     /// A multi-party flow (delegation, multisig) is waiting on another party.
-    #[error("a step in a multi-party flow is pending: {what}; call pending_requests() on the other party and approve")]
+    #[error("a step in a multi-party flow is pending: {what}; deliver the request to the other party, who receives and approves it")]
     PendingApproval {
         /// Which approval is outstanding.
         what: String,

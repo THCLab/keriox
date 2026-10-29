@@ -48,8 +48,9 @@
 //!
 //! Multi-party flows — delegation ([`IdentityBuilder::delegated_by`]) and
 //! group identities ([`Identity::new_group`]) — are modeled as a small
-//! number of explicit steps coordinated through witnesses; the other side
-//! finds requests in [`Identity::pending_requests`].
+//! number of explicit steps: each produces messages ([`Outgoing`]) the
+//! application delivers to the other party, who takes them with
+//! [`Identity::receive`].
 //!
 //! The `tests/e2e_*.rs` files in the repository are narrated, runnable
 //! walkthroughs of every flow above.
@@ -76,6 +77,7 @@ pub mod advanced;
 
 mod contact;
 mod credential;
+mod delivery;
 mod error;
 mod group;
 mod identity;
@@ -89,6 +91,7 @@ mod retry;
 pub mod concepts {}
 
 pub use credential::{Credential, CredentialStatus, ReceivedCredential};
+pub use delivery::Outgoing;
 pub use error::{Error, Result};
 pub use group::{Group, GroupBuilder, GroupInvite, GroupRequest};
 pub use identity::{Identity, IdentityBackup, IdentityBuilder, KeyAlgorithm};

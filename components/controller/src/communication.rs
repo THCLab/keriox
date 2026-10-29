@@ -8,10 +8,7 @@ use keri_core::{
     oobi::{EndRole, LocationScheme, Oobi},
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix},
-    query::{
-        mailbox::SignedMailboxQuery,
-        query_event::{SignedKelQuery, SignedQueryMessage},
-    },
+    query::query_event::{SignedKelQuery, SignedQueryMessage},
     transport::{Transport, TransportError},
 };
 use teliox::registry::RegistryStore;
@@ -149,18 +146,6 @@ where
         Ok(self
             .transport
             .send_query(loc, SignedQueryMessage::KelQuery(query))
-            .await?)
-    }
-
-    pub async fn send_management_query_to(
-        &self,
-        id: &IdentifierPrefix,
-        query: SignedMailboxQuery,
-    ) -> Result<PossibleResponse, SendingError> {
-        let loc = self.events.find_http_location(id)?;
-        Ok(self
-            .transport
-            .send_query(loc, SignedQueryMessage::MailboxQuery(query))
             .await?)
     }
 

@@ -9,7 +9,7 @@ use keri_core::{
     event_message::{
         signature::Signature, signed_event_message::Notice,
     },
-    query::{mailbox::MailboxQuery, query_event::QueryEvent},
+    query::query_event::QueryEvent,
     state::{IdentifierState, IdentifierStatus},
 };
 use keri_core::event_message::msg::KeriEvent;
@@ -22,6 +22,7 @@ use crate::advanced::error::Result;
 use crate::advanced::types::VerificationIssue;
 
 pub use keri_controller::identifier::query::WatcherResponseError;
+pub use keri_controller::identifier::mechanics::forwards::Forward;
 pub use keri_controller::mailbox_updating::ActionRequired;
 
 use keri_core::prefix::IndexedSignature;
@@ -727,9 +728,8 @@ impl Identifier {
     })
     }
 
-    // ── Mailbox / watcher queries ────────────────────────────────────────────
+    // ── Watcher queries and group signing ────────────────────────────────────
 
-    /// Generate mailbox query events for each of the given witnesses.
     /// Sign `data` as `group` at `key_index` — see
     /// [`crate::advanced::signing::sign_as_group_to_cesr`], which
     /// resolves the index for you.
@@ -745,36 +745,35 @@ impl Identifier {
     })
     }
 
-    /// Ask for `identifier`'s whole mailbox again on the next query,
-    /// for a caller still waiting on something the mailbox has already
-    /// handed over once.
-    pub fn reset_group_mailbox_index(
+    /// Key event log queries about `identifier` to its `witnesses`, whose
+    /// answers carry the witnesses' receipts.
+    pub fn query_receipts(
         &self,
         identifier: &IdentifierPrefix,
         witnesses: &[BasicPrefix],
-    ) -> Result<()> {
+    ) -> Result<Vec<QueryEvent>> {
         dispatch!(self, i => {
-        Ok(i.reset_group_mailbox_index(identifier, witnesses)?)
+        Ok(i.query_receipts(identifier, witnesses)?)
     })
     }
 
-    pub fn query_mailbox(
-        &self,
-        identifier: &IdentifierPrefix,
-        witnesses: &[BasicPrefix],
-    ) -> Result<Vec<MailboxQuery>> {
-        dispatch!(self, i => {
-        Ok(i.query_mailbox(identifier, witnesses)?)
-    })
-    }
-
-    /// Sign + send mailbox queries, process responses. Returns required actions.
-    pub async fn finalize_query_mailbox(
+    /// Send signed receipt queries, take in the answers, and pass this
+    /// identifier's receipts on to the witnesses asked. Returns the
+    /// witnesses' errors, which do not fail the call.
+    pub async fn finalize_query_receipts(
         &mut self,
-        queries: Vec<(MailboxQuery, SelfSigningPrefix)>,
-    ) -> Result<Vec<ActionRequired>> {
+        queries: Vec<(QueryEvent, SelfSigningPrefix)>,
+    ) -> Result<Vec<WatcherResponseError>> {
         dispatch_mut!(self, i => {
-        Ok(i.finalize_query_mailbox(queries).await?)
+        Ok(i.finalize_query_receipts(queries).await?)
+    })
+    }
+
+    /// Take forwards delivered to this identifier or to a group it is a
+    /// member of; returns what needs this identifier's signature.
+    pub async fn receive_forwards(&mut self, stream: &[u8]) -> Result<Vec<ActionRequired>> {
+        dispatch_mut!(self, i => {
+        Ok(i.receive_forwards(stream).await?)
     })
     }
 
@@ -924,13 +923,14 @@ impl Identifier {
     })
     }
 
-    /// Finalise a group/delegated inception event. Returns the new prefix.
+    /// Finalise a group/delegated inception event. Returns the new prefix
+    /// and the forwards to deliver.
     pub async fn finalize_group_incept(
         &mut self,
         group_event: &[u8],
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, Signature)>,
-    ) -> Result<IdentifierPrefix> {
+    ) -> Result<(IdentifierPrefix, Vec<Forward>)> {
         dispatch_mut!(self, i => {
         Ok(i
             .finalize_group_incept(group_event, sig, exchanges)
@@ -938,13 +938,14 @@ impl Identifier {
     })
     }
 
-    /// Finalise a group event (e.g. a delegating IXN).
+    /// Finalise a group event (e.g. a delegating IXN). Returns the
+    /// forwards to deliver.
     pub async fn finalize_group_event(
         &mut self,
         group_event: &[u8],
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, Signature)>,
-    ) -> Result<()> {
+    ) -> Result<Vec<Forward>> {
         dispatch_mut!(self, i => {
         Ok(i
             .finalize_group_event(group_event, sig, exchanges)
@@ -953,19 +954,17 @@ impl Identifier {
     }
 
     /// Finalise an exchange message (e.g. delegation approval forwarding):
-    /// send it with `forwarded`, the event it forwards, signed with
-    /// `data_signature`.
-    pub async fn finalize_exchange(
+    /// the forward to deliver, with `forwarded`, the event it forwards,
+    /// signed with `data_signature`.
+    pub fn finalize_exchange(
         &self,
         exchange: &[u8],
         exn_signature: Signature,
         forwarded: &keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
         data_signature: IndexedSignature,
-    ) -> Result<()> {
+    ) -> Result<Forward> {
         dispatch!(self, i => {
-        Ok(i
-            .finalize_exchange(exchange, exn_signature, forwarded, data_signature)
-            .await?)
+        Ok(i.finalize_exchange(exchange, exn_signature, forwarded, data_signature)?)
     })
     }
 

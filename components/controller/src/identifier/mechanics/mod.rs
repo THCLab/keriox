@@ -2,16 +2,16 @@ use keri_core::{oobi::error::OobiError, prefix::IdentifierPrefix, transport::Tra
 
 use crate::communication::SendingError;
 
-use self::{broadcast::BroadcastingError, query_mailbox::ResponseProcessingError};
+use self::{broadcast::BroadcastingError, forwards::ResponseProcessingError};
 
 pub mod broadcast;
 pub mod cache;
 pub mod delegate;
 pub mod group;
 pub mod kel_managing;
+pub mod forwards;
 mod mailbox;
 pub mod notify_witness;
-pub mod query_mailbox;
 pub mod watcher_configuration;
 
 #[derive(Debug, thiserror::Error)]

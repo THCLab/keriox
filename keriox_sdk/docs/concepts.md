@@ -85,14 +85,17 @@ One identity authorizing another to act under its authority — e.g. your
 phone's identity delegated by your main identity. The delegation is anchored
 in the delegator's key log, so verifiers can walk the chain of authority.
 Inherently a two-party handshake: request → approve → finalize
-(`delegated_by` → `pending_requests` → `finalize`).
+(`delegated_by` → `receive` and `approve` → `finalize`). The request and the
+approval are messages the application delivers between the two sides,
+through any channel, a messagebox for instance.
 
 ## Group identity (multisig)
 
 One identity controlled by several members with a signing threshold ("2 of
-3 directors"). Group events are co-signed by members through their shared
-witness's mailbox. In the SDK: `identity.new_group(...)`, invitations arrive
-via `pending_requests()`.
+3 directors"). Group events are co-signed by members, each delivering its
+signature to the others as a message; the group's witnesses witness its
+events. In the SDK: `identity.new_group(...)` returns the invitations to
+deliver, which members take with `receive()`.
 
 ## SAID & CESR (you'll see these in strings)
 

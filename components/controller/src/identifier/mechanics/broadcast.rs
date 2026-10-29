@@ -171,14 +171,19 @@ mod test {
                 && matches!(evt.witness_receipts.as_ref().unwrap().len(), 1)
         ));
 
-        // Querying mailbox to get receipts
-        for qry in identifier.query_mailbox(&identifier.id, &[wit1_id.clone(), wit2_id.clone()])? {
-            let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
-            let act = identifier
-                .finalize_query_mailbox(vec![(qry, signature)])
-                .await?;
-            assert!(act.is_empty());
-        }
+        // Asking the witnesses for the KEL gets their receipts, and
+        // passes each on to the other.
+        let id = identifier.id.clone();
+        let queries = identifier
+            .query_receipts(&id, &[wit1_id.clone(), wit2_id.clone()])?
+            .into_iter()
+            .map(|qry| {
+                let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
+                Ok((qry, signature))
+            })
+            .collect::<Result<Vec<_>, ControllerError>>()?;
+        let errors = identifier.finalize_query_receipts(queries).await?;
+        assert!(errors.is_empty(), "{errors:?}");
 
         assert_eq!(identifier.notify_witnesses().await?, 0);
         // Check if receipts was broadcasted

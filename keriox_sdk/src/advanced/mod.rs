@@ -38,7 +38,7 @@ pub mod keyprovider_adapter;
 pub use controller::Controller;
 pub use ephemeral::EphemeralIdentifier;
 pub use error::{Error, Result};
-pub use identifier::{ActionRequired, Identifier, WatcherResponseError};
+pub use identifier::{ActionRequired, Forward, Identifier, WatcherResponseError};
 pub use oobi_store::OobiStore;
 pub use secrets::{FileSecretsStore, MemorySecretsStore, SecretsStore};
 pub use status::{

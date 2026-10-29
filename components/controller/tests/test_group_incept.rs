@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use keri_controller::IdentifierPrefix;
+use keri_controller::{mailbox_updating::ActionRequired, IdentifierPrefix};
 use keri_controller::{config::ControllerConfig, controller::Controller, error::ControllerError};
 use keri_core::{
     prefix::{BasicPrefix, CesrPrimitive, SelfSigningPrefix},
@@ -48,9 +48,9 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     let exn_index_signature = identifier1.sign_with_index(signature_exn, 0)?;
 
     // Group initiator needs to use `finalize_group_incept` instead of just
-    // `finalize_event`, to send multisig request to other group participants.
-    // Identifier who get this request from mailbox, can use just `finalize_event`
-    let group_id = identifier1
+    // `finalize_event`: it returns the forwards that carry the inception to
+    // the other group participants, for the application to deliver.
+    let (group_id, forwards) = identifier1
         .finalize_group_incept(
             group_inception.as_bytes(),
             signature_icp,
@@ -62,10 +62,16 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     // Event is not yet accepted.
     assert!(kel.is_none());
 
-    // TODO: There should be witness who forward group icp from identifier1 to
-    // identifier2.  It will be stored in identifier2 mailbox. Assume, that
-    // identifier2 found icp signed by identifier1 in his mailbox.
-    // It works, because we use common controller for both identifiers.
+    // identifier2 receives the forward, which asks it to co-sign.
+    let [forward] = forwards.as_slice() else {
+        panic!("one forward, to the other participant: {forwards:?}")
+    };
+    assert_eq!(&forward.to, identifier2.id());
+    let actions = identifier2.receive_forwards(&forward.message).await?;
+    assert!(
+        matches!(actions.as_slice(), [ActionRequired::MultisigRequest(..)]),
+        "{actions:?}"
+    );
     let signature_icp = SelfSigningPrefix::Ed25519Sha512(km2.sign(group_inception.as_bytes())?);
     identifier2
         .finalize_group_event(group_inception.as_bytes(), signature_icp, vec![])

@@ -3,9 +3,10 @@
 //!
 //! A group is created by one member ([`crate::Identity::new_group`]) and
 //! joined by the others ([`GroupRequest::accept_as`] via
-//! [`crate::Identity::pending_requests`]). All members coordinate through
-//! their shared witness's mailbox; the facade handles every event, exchange
-//! message and mailbox round internally.
+//! [`crate::Identity::receive`]). Members coordinate by messages
+//! ([`crate::Outgoing`]) the application delivers between them, through any
+//! channel; the group's events are witnessed by its witnesses, from which
+//! every member collects receipts and the group's key history.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -13,6 +14,7 @@ use std::time::{Duration, Instant};
 use keri_controller::IdentifierPrefix;
 use keri_core::prefix::CesrPrimitive;
 
+use crate::delivery::{members_by_keys, outgoing, Outgoing};
 use crate::error::{Error, Result};
 use crate::ids::IdentityId;
 use crate::keri::KeriInner;
@@ -41,9 +43,10 @@ impl GroupBuilder {
         self
     }
 
-    /// Create the group and invite the other members (they receive a
-    /// [`GroupRequest`] via their `pending_requests()`). Returns a
-    /// handle to await the group becoming ready once everyone accepted.
+    /// Create the group. Returns a handle holding the invitations to
+    /// deliver to the other members (each takes its invitation with
+    /// [`crate::Identity::receive`], as a [`GroupRequest`]) and to await the
+    /// group becoming ready once everyone accepted.
     pub async fn initiate(self) -> Result<GroupInvite> {
         if self.members.is_empty() {
             return Err(Error::InvalidInput {
@@ -74,7 +77,7 @@ impl GroupBuilder {
         if witnesses.is_empty() {
             return Err(Error::InvalidInput {
                 expected: "initiator identity with at least one witness",
-                cause: "group coordination travels through the witness mailbox".into(),
+                cause: "a group's events are witnessed by its initiator's witnesses".into(),
             });
         }
         let witness_threshold = witnesses.len() as u64;
@@ -89,7 +92,7 @@ impl GroupBuilder {
             witness_threshold,
             delegator: None,
         };
-        let group_id = self
+        let (group_id, forwards) = self
             .keri
             .store
             .create_multisig_group(&self.group_alias, &self.member_alias, config)
@@ -107,11 +110,13 @@ impl GroupBuilder {
             &self.member_alias,
         )?;
 
+        let invitations = outgoing(forwards, Some(&group_id), &all_members, member_identifier.id());
         Ok(GroupInvite {
             keri: self.keri,
             group_alias: self.group_alias,
             member_alias: self.member_alias,
             group_id,
+            invitations,
         })
     }
 }
@@ -122,6 +127,7 @@ pub struct GroupInvite {
     pub(crate) group_alias: String,
     pub(crate) member_alias: String,
     pub(crate) group_id: IdentifierPrefix,
+    pub(crate) invitations: Vec<Outgoing>,
 }
 
 impl GroupInvite {
@@ -130,14 +136,21 @@ impl GroupInvite {
         IdentityId::from(self.group_id.clone())
     }
 
-    /// Wait until every member has accepted and the group is usable.
-    /// Polls the witness mailbox until `timeout` elapses.
+    /// The invitations to deliver, one per other member.
+    pub fn invitations(&self) -> &[Outgoing] {
+        &self.invitations
+    }
+
+    /// Wait until every member has accepted and the group is usable: once
+    /// their acceptances are delivered to this member
+    /// ([`crate::Identity::receive`]), polls the witnesses for the group's
+    /// receipts until `timeout` elapses.
     pub async fn wait_ready(self, timeout: Duration) -> Result<Group> {
         let deadline = Instant::now() + timeout;
         let signer = self.keri.store.load_signer(&self.member_alias)?;
         loop {
             let mut member = self.keri.store.load(&self.member_alias)?;
-            // Collect co-signatures and receipts from the mailbox.
+            // Collect the group's receipts from its witnesses.
             let _ = crate::advanced::operations::sync_multisig(&mut member, &signer, &self.group_id)
                 .await;
             if member.find_state(&self.group_id).is_ok() {
@@ -245,20 +258,21 @@ impl Group {
     /// Issue a credential from the group: an ACDC of the schema with SAID
     /// `schema` and the given attributes, in a private registry of its own
     /// that this member keeps. With a signing threshold above 1, the other
-    /// members must co-sign the anchoring event: they see it in
-    /// [`crate::Identity::pending_requests`] and accept.
+    /// members must co-sign the anchoring event: deliver them the returned
+    /// messages, which they take with [`crate::Identity::receive`] and
+    /// accept.
     pub async fn issue(
         &self,
         schema: &str,
         attributes: acdc::Block,
-    ) -> Result<crate::credential::Credential> {
+    ) -> Result<(crate::credential::Credential, Vec<Outgoing>)> {
         let signer = self.keri.store.load_signer(&self.member_alias)?;
         let member_id = self.keri.store.load(&self.member_alias)?.id().clone();
         let blinding = teliox::registry::Blinding::private();
         let issuer = self.group_id.to_string();
 
         let mut group = self.group_identifier()?;
-        let (presentation, _digest) = crate::advanced::registry::issue_group(
+        let (presentation, _digest, forwards) = crate::advanced::registry::issue_group(
             &mut group,
             &member_id,
             &signer,
@@ -271,7 +285,24 @@ impl Group {
             .await
             .map_err(crate::advanced::Error::from)?;
         self.sync().await?;
-        crate::identity::credential(&self.keri, &self.group_alias, self.id(), presentation, &blinding)
+        let credential = crate::identity::credential(
+            &self.keri,
+            &self.group_alias,
+            self.id(),
+            presentation,
+            &blinding,
+        )?;
+        Ok((credential, self.outgoing(forwards, &member_id)?))
+    }
+
+    /// The messages to deliver for `forwards` this member made.
+    fn outgoing(
+        &self,
+        forwards: Vec<crate::advanced::Forward>,
+        member_id: &IdentifierPrefix,
+    ) -> Result<Vec<Outgoing>> {
+        let members = self.keri.store.load_multisig_members(&self.group_alias)?;
+        Ok(outgoing(forwards, Some(&self.group_id), &members, member_id))
     }
 
     /// Rotate the group's keys (initiator side).
@@ -281,14 +312,14 @@ impl Group {
     /// must rotate their own identity first** (their
     /// [`crate::Identity::rotate`]); then the initiator calls this, which
     /// rotates the initiator's own keys if they still need it and publishes
-    /// the group rotation. The other members co-sign via
-    /// [`crate::Identity::pending_requests`].
+    /// the group rotation. Deliver the returned messages to the other
+    /// members, who co-sign through [`crate::Identity::receive`].
     ///
     /// Retrying after an interrupted group rotation is safe: a member whose
     /// current key is already one the group committed to is not rolled a
     /// second time, which would leave it with a key the group never
     /// committed to.
-    pub async fn rotate(&self) -> Result<()> {
+    pub async fn rotate(&self) -> Result<Vec<Outgoing>> {
         // The rotation event names every member's *new* public key, so the
         // other members' rotated histories must be known locally first.
         self.refresh_member_kels().await;
@@ -328,11 +359,12 @@ impl Group {
             witness_to_remove: vec![],
             witness_threshold: None,
         };
-        self.keri
+        let forwards = self
+            .keri
             .store
             .rotate_multisig_group(&self.group_alias, config)
             .await?;
-        Ok(())
+        self.outgoing(forwards, &member_id)
     }
 
     /// The members known locally (see [`members`](Self::members)) that must
@@ -382,18 +414,16 @@ impl Group {
         }
     }
 
-    /// Bring local group state up to date: collect other members'
-    /// signatures and witness receipts from the mailbox, and pull any group
-    /// events (e.g. rotations published by another member) from the
-    /// witnesses' copy of the group's key log.
+    /// Bring local group state up to date: collect the group's witness
+    /// receipts, and pull any group events (e.g. rotations published by
+    /// another member) from the witnesses' copy of the group's key log.
     pub async fn sync(&self) -> Result<()> {
         let signer = self.keri.store.load_signer(&self.member_alias)?;
         let mut member = self.keri.store.load(&self.member_alias)?;
         crate::advanced::operations::sync_multisig(&mut member, &signer, &self.group_id).await?;
 
-        // Mailbox delivery only covers events addressed to this member;
-        // events another member published directly (with their authority)
-        // live in the witnesses' group KEL — fetch those too.
+        // Events another member published (with their authority) live in
+        // the witnesses' group KEL — fetch those too.
         let witnesses: Vec<_> = member.witnesses();
         for witness in witnesses {
             let locations = member
@@ -422,7 +452,7 @@ impl Group {
     }
 }
 
-/// A group request found in [`crate::Identity::pending_requests`]: either
+/// A group request taken with [`crate::Identity::receive`]: either
 /// an invitation to a new group, or a group event (key rotation, credential
 /// issuance, …) started by another member that needs this member's
 /// co-signature.
@@ -455,33 +485,54 @@ impl GroupRequest {
     }
 
     /// Accept an invitation and store the group under `group_alias`.
-    /// Returns the joined [`Group`] once membership is synchronized.
-    pub async fn accept_as(self, group_alias: &str) -> Result<Group> {
+    /// Returns the joined [`Group`] and the messages carrying this member's
+    /// signature to the other members.
+    pub async fn accept_as(self, group_alias: &str) -> Result<(Group, Vec<Outgoing>)> {
         let group_id = self.inner.group_prefix();
         let member_alias = self.member_alias.clone();
-        self.co_sign().await?;
-
-        // Record what we know about the group locally.
-        let member = self.keri.store.load(&member_alias)?;
-        let members = vec![member.id().clone()];
+        let (members, outgoing) = self.co_sign().await?;
         self.keri
             .store
             .save_multisig(group_alias, &group_id, &members, &member_alias)?;
+        Ok((
+            Group {
+                keri: self.keri,
+                group_alias: group_alias.to_string(),
+                member_alias,
+                group_id,
+            },
+            outgoing,
+        ))
+    }
 
-        Ok(Group {
-            keri: self.keri,
-            group_alias: group_alias.to_string(),
-            member_alias,
-            group_id,
+    /// Co-sign an event of a group this store already belongs to. Returns
+    /// the messages carrying this member's signature to the other members.
+    pub async fn accept(self) -> Result<Vec<Outgoing>> {
+        Ok(self.co_sign().await?.1)
+    }
+
+    /// The keys the requested event gives the group: its members' current
+    /// keys.
+    fn keys(&self) -> Result<Vec<keri_controller::BasicPrefix>> {
+        use keri_core::event::event_data::EventData;
+        Ok(match &self.inner.event.data.event_data {
+            EventData::Icp(icp) => icp.key_config.public_keys.clone(),
+            EventData::Dip(dip) => dip.inception_data.key_config.public_keys.clone(),
+            EventData::Rot(rot) | EventData::Drt(rot) => rot.key_config.public_keys.clone(),
+            EventData::Ixn(_) => {
+                self.keri
+                    .store
+                    .load(&self.member_alias)?
+                    .find_state(&self.inner.group_prefix())?
+                    .current
+                    .public_keys
+            }
         })
     }
 
-    /// Co-sign an event of a group this store already belongs to.
-    pub async fn accept(self) -> Result<()> {
-        self.co_sign().await
-    }
-
-    async fn co_sign(&self) -> Result<()> {
+    /// Co-signs; returns the group's members as known here and the
+    /// messages to deliver to them.
+    async fn co_sign(&self) -> Result<(Vec<IdentifierPrefix>, Vec<Outgoing>)> {
         let group_id = self.inner.group_prefix();
         let signer = self.keri.store.load_signer(&self.member_alias)?;
 
@@ -493,10 +544,13 @@ impl GroupRequest {
             }
         }
 
+        let members = members_by_keys(&self.keri, &self.member_alias, &self.keys()?)?;
         let mut member = self.keri.store.load(&self.member_alias)?;
-        crate::advanced::operations::accept_multisig(&mut member, &signer, self.inner.clone())
-            .await?;
+        let own = member.id().clone();
+        let forwards =
+            crate::advanced::operations::accept_multisig(&mut member, &signer, self.inner.clone())
+                .await?;
         crate::advanced::operations::sync_multisig(&mut member, &signer, &group_id).await?;
-        Ok(())
+        Ok((members.clone(), outgoing(forwards, Some(&group_id), &members, &own)))
     }
 }

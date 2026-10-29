@@ -2,10 +2,10 @@
 //!
 //! These helpers let callers route signatures over a group event
 //! directly between members (e.g. via Iroh, QUIC, or any peer
-//! channel), bypassing the witness mailbox. The normal production
-//! flow goes through witnesses — these helpers exist for tests, for
-//! offline coordination, and for transports that have their own
-//! delivery story.
+//! channel), without forwards. The normal flow delivers forwards
+//! ([`crate::advanced::operations::receive_forwards`]) — these helpers
+//! exist for tests, for offline coordination, and for transports that
+//! have their own delivery story.
 //!
 //! # Workflow
 //!

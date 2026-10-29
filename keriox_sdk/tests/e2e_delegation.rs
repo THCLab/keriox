@@ -3,10 +3,11 @@
 //! Alice (a person's main identity) authorizes a new "phone" identity to act
 //! under her authority. Three steps, two parties:
 //!
-//! 1. the phone requests delegation (the request travels through the
-//!    shared witness's mailbox),
-//! 2. Alice finds the request in `pending_requests()` and approves it,
-//! 3. the phone finalizes and becomes a usable delegated identity.
+//! 1. the phone requests delegation, a message delivered to Alice,
+//! 2. Alice takes it with `receive()` and approves it, delivering her
+//!    approval back,
+//! 3. the phone finalizes with the approval and becomes a usable delegated
+//!    identity.
 
 mod common;
 
@@ -40,7 +41,11 @@ async fn delegate_a_phone_identity(infra: &mut TestInfra) {
     assert_eq!(&handle.delegator_id(), alice.id());
 
     // ── Step 2: Alice approves ────────────────────────────────────────────
-    let requests = alice.pending_requests().await.expect("mailbox poll");
+    let [request] = handle.requests() else {
+        panic!("one request, to the delegator")
+    };
+    assert_eq!(&request.to, alice.id());
+    let requests = alice.receive(&request.message).await.expect("receive");
     let delegation = requests
         .into_iter()
         .find_map(|r| match r {
@@ -50,10 +55,14 @@ async fn delegate_a_phone_identity(infra: &mut TestInfra) {
         })
         .expect("alice sees the phone's delegation request");
     assert_eq!(delegation.delegate(), phone_future_id);
-    delegation.approve().await.expect("approval");
+    let approval = delegation.approve().await.expect("approval");
+    assert_eq!(approval.to, phone_future_id);
 
     // ── Step 3: the phone finalizes ───────────────────────────────────────
-    let phone = handle.finalize().await.expect("finalize delegation");
+    let phone = handle
+        .finalize(&approval.message)
+        .await
+        .expect("finalize delegation");
     assert_eq!(phone.id(), &phone_future_id);
 
     // The delegated identity signs; verification works like any other.
@@ -93,7 +102,7 @@ async fn finalize_before_approval_is_a_clear_error(infra: &mut TestInfra) {
         .unwrap();
 
     // Nobody approved — finalize must not succeed.
-    let result = handle.finalize().await;
+    let result = handle.finalize(&[]).await;
     assert!(
         result.is_err(),
         "finalize without approval must fail, got a usable identity"

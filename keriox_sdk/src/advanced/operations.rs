@@ -1,7 +1,7 @@
 //! Higher-level compound operations for common KERI workflows.
 //!
 //! These functions combine multiple low-level steps (event generation,
-//! signing, witness notification, mailbox queries) so callers don't need to
+//! signing, witness notification, receipt collection) so callers don't need to
 //! orchestrate individual calls. All signing is done internally with the
 //! provided signer — callers never touch raw CESR prefix types.
 //!
@@ -20,13 +20,12 @@ use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
     event::sections::threshold::SignatureThreshold,
     prefix::{CesrPrimitive, IndexedSignature},
-    query::mailbox::SignedMailboxQuery,
 };
 
 use crate::advanced::{
     controller::Controller,
     error::{Error, Result},
-    identifier::{ActionRequired, Identifier},
+    identifier::{Forward, Identifier},
     types::{
         AbandonConfig, DelegationConfig, DelegationRequest, GroupAbandonConfig,
         GroupRotationConfig, IdentifierConfig, MultisigConfig, MultisigRequest, PendingRequest,
@@ -141,12 +140,12 @@ pub(crate) fn wrap_sig(signer: &dyn SigningBackend, data: &[u8]) -> Result<SelfS
 /// 1. Generates an inception event with the given keys and witness config.
 /// 2. Signs + finalises it.
 /// 3. Notifies witnesses.
-/// 4. Queries each witness mailbox.
+/// 4. Collects each witness's receipts.
 /// 5. Sends witness OOBIs to watchers and configures each watcher.
 ///
 /// # Errors
 /// - [`Error::Controller`] if event generation or finalisation fails.
-/// - [`Error::Mechanics`] if witness notification or mailbox queries fail.
+/// - [`Error::Mechanics`] if witness notification or receipt queries fail.
 /// - [`Error::Signing`] if the signer fails to produce a signature.
 pub async fn create_identifier<S: SigningBackend + Clone + 'static>(
     db_path: std::path::PathBuf,
@@ -183,12 +182,12 @@ pub(crate) async fn create_identifier_with_controller<S: SigningBackend + Clone 
 
     for wit in &config.witnesses {
         if let IdentifierPrefix::Basic(wit_id) = &wit.eid {
-            _query_mailbox(&mut id, &signer, wit_id).await?;
+            own_receipts(&mut id, &signer, wit_id).await?;
         }
         id.send_oobi_to_watcher(id.id(), &Oobi::Location(wit.clone()))
             .await?;
         if let IdentifierPrefix::Basic(wit_id) = &wit.eid {
-            _query_mailbox(&mut id, &signer, wit_id).await?;
+            own_receipts(&mut id, &signer, wit_id).await?;
         }
     }
 
@@ -243,14 +242,14 @@ pub async fn add_messagebox<S: SigningBackend>(
     Ok(())
 }
 
-/// Rotate keys, notify witnesses, and query mailboxes.
+/// Rotate keys, notify witnesses, and collect their receipts.
 ///
 /// Signs the rotation event with `current_signer`, sends it to witnesses,
-/// then queries each witness mailbox to process the receipts.
+/// then collects each witness's receipts.
 ///
 /// # Errors
 /// - [`Error::Controller`] if rotation event generation fails.
-/// - [`Error::Mechanics`] if witness notification or mailbox queries fail.
+/// - [`Error::Mechanics`] if witness notification or receipt queries fail.
 /// - [`Error::Signing`] if signing fails.
 pub async fn rotate<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
@@ -278,7 +277,7 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
 
     let witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in witnesses {
-        _query_mailbox(id, &current_signer, &witness).await?;
+        own_receipts(id, &current_signer, &witness).await?;
     }
 
     Ok(())
@@ -321,31 +320,31 @@ fn witness_threshold_or_current(id: &Identifier, requested: Option<u64>) -> Resu
     }
 }
 
-/// Abandon an identifier, notify witnesses, and query mailboxes.
+/// Abandon an identifier, notify witnesses, and collect their receipts.
 ///
 /// `current_signer` holds the key the last establishment event committed
 /// to, as for [`rotate`]. The abandoning event reveals it and commits to no
 /// next keys, so the identifier's key event log is final: witnesses refuse
 /// anything after it and every verifier sees it as abandoned. The revealed
-/// key can still sign mailbox queries (to collect receipts), but nothing it
-/// signs speaks for the identifier any more.
+/// key can still sign receipt queries, but nothing it signs speaks for the
+/// identifier any more.
 ///
-/// A delegated identifier gets a `drt`. Witnesses hold it for the delegator,
-/// who finds it among its delegation requests; until the delegator anchors
-/// it the abandonment is pending, so this returns without collecting
-/// receipts. Query the mailbox again once the delegator has approved.
+/// A delegated identifier gets a `drt`, which waits for its delegator to
+/// anchor it: this then returns it as [`AwaitingDelegator`], without
+/// collecting receipts. Send the delegator [`delegation_request`], take
+/// its approval with [`receive_forwards`], and collect the receipts.
 ///
 /// Returns the SAID of the abandoning event.
 ///
 /// # Errors
 /// - [`Error::IdentifierAbandoned`] if it already is.
-/// - [`Error::Mechanics`] if witness notification or mailbox queries fail.
+/// - [`Error::Mechanics`] if witness notification or receipt queries fail.
 /// - [`Error::Signing`] if signing fails.
 pub async fn abandon<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     current_signer: S,
     config: AbandonConfig,
-) -> Result<SelfAddressingIdentifier> {
+) -> Result<(SelfAddressingIdentifier, Option<AwaitingDelegator>)> {
     let witness_threshold = witness_threshold_or_current(id, config.witness_threshold)?;
     let current_keys = vec![committed_key(id, &current_signer)?];
     let event = id
@@ -358,14 +357,16 @@ pub async fn abandon<S: SigningBackend + Clone + 'static>(
         )
         .await?;
 
-    let said = match keri_core::event_message::cesr_adapter::parse_event_type(event.as_bytes()) {
-        Ok(keri_core::event_message::cesr_adapter::EventType::KeyEvent(ke)) => ke
-            .digest()
-            .map_err(|e| Error::EncodingError(e.to_string()))?,
-        _ => return Err(Error::EncodingError("abandonment is not a key event".into())),
-    };
+    let key_event =
+        match keri_core::event_message::cesr_adapter::parse_event_type(event.as_bytes()) {
+            Ok(keri_core::event_message::cesr_adapter::EventType::KeyEvent(ke)) => ke,
+            _ => return Err(Error::EncodingError("abandonment is not a key event".into())),
+        };
+    let said = key_event
+        .digest()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
     let sig = wrap_sig(&current_signer, event.as_bytes())?;
-    id.finalize_rotate(event.as_bytes(), sig).await?;
+    id.finalize_rotate(event.as_bytes(), sig.clone()).await?;
     id.notify_witnesses().await?;
 
     // A delegated identifier's `drt` waits for its delegator. Until then the
@@ -373,85 +374,124 @@ pub async fn abandon<S: SigningBackend + Clone + 'static>(
     // revealed one.
     let state = id.find_state(id.id())?;
     if state.delegator.is_some() {
-        return Ok(said);
+        return Ok((
+            said,
+            Some(AwaitingDelegator {
+                event: key_event,
+                signature: sig,
+            }),
+        ));
     }
     let witnesses = state.witness_config.witnesses;
     for witness in witnesses {
-        _query_mailbox(id, &current_signer, &witness).await?;
+        own_receipts(id, &current_signer, &witness).await?;
     }
 
-    Ok(said)
+    Ok((said, None))
 }
 
-/// Sign and send mailbox queries to a single witness; return the signed queries.
+/// A delegated identifier's event waiting for its delegator to anchor it:
+/// the event, and the signature it was finalised with.
+#[derive(Debug, Clone)]
+pub struct AwaitingDelegator {
+    pub event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
+    pub signature: SelfSigningPrefix,
+}
+
+/// The delegation request asking `delegator` to anchor `awaiting`: a
+/// forward to deliver to it, signed with `signer`, the key of `id` the
+/// delegator knows (the one before the event).
 ///
-/// This is an internal helper used by other operations in this module. It is
-/// also useful when you want to pull updates from a specific witness without
-/// doing a full operation.
+/// # Errors
+/// - [`Error::Signing`] if signing fails.
+/// - [`Error::Mechanics`] if the request cannot be built.
+pub fn delegation_request<S: SigningBackend>(
+    id: &Identifier,
+    signer: &S,
+    delegator: &IdentifierPrefix,
+    awaiting: &AwaitingDelegator,
+) -> Result<Forward> {
+    use keri_core::{actor::event_generator, mailbox::exchange::ForwardTopic};
+    let exn = event_generator::exchange(id.id(), delegator, &awaiting.event, ForwardTopic::Delegate)
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let exn_signature = id.sign_with_index(wrap_sig(signer, &exn)?, 0)?;
+    id.finalize_exchange(
+        &exn,
+        exn_signature,
+        &awaiting.event,
+        IndexedSignature::new_both_same(awaiting.signature.clone(), 0),
+    )
+}
+
+/// Collect the receipts of `about` (the identifier, or a group it is a
+/// member of) from `witness_id`: ask the witness for `about`'s key event
+/// log, take in the events and receipts it answers with, and pass the
+/// identifier's receipts on to the witness.
+///
+/// A witness that cannot answer yet (it does not hold the log) is no
+/// error; ask again later.
 ///
 /// # Errors
 /// - [`Error::Mechanics`] on network or processing failures.
 /// - [`Error::Signing`] if signing fails.
 /// - [`Error::EncodingError`] if query encoding fails.
-pub async fn query_mailbox<S: SigningBackend>(
-    id: &mut Identifier,
-    km: S,
-    witness_id: &BasicPrefix,
-) -> Result<Vec<SignedMailboxQuery>> {
-    _query_mailbox(id, &km, witness_id).await
-}
-
-// Private implementation to avoid name collision with Identifier::query_mailbox.
-async fn _query_mailbox<S: SigningBackend>(
-    id: &mut Identifier,
-    km: &S,
-    witness_id: &BasicPrefix,
-) -> Result<Vec<SignedMailboxQuery>> {
-    let mut out = vec![];
-    for qry in id.query_mailbox(id.id(), &[witness_id.clone()])? {
-        let encoded = qry
-            .encode()
-            .map_err(|e| Error::EncodingError(e.to_string()))?;
-        let sig = SelfSigningPrefix::new(km.signing_code(), km.sign_data(&encoded)?)?;
-        let signatures = vec![IndexedSignature::new_both_same(sig.clone(), 0)];
-        let signed_qry = SignedMailboxQuery::new_trans(qry.clone(), id.id().clone(), signatures);
-        id.finalize_query_mailbox(vec![(qry, sig)]).await?;
-        out.push(signed_qry);
-    }
-    Ok(out)
-}
-
-/// Like `_query_mailbox` but queries for an arbitrary identifier (not just
-/// the identifier's own prefix). Returns any `ActionRequired` items.
-async fn _query_mailbox_for<S: SigningBackend>(
+pub async fn collect_receipts<S: SigningBackend>(
     id: &mut Identifier,
     km: &S,
     about: &IdentifierPrefix,
     witness_id: &BasicPrefix,
-) -> Result<Vec<ActionRequired>> {
-    let mut actions = vec![];
-    for qry in id.query_mailbox(about, &[witness_id.clone()])? {
+) -> Result<()> {
+    let mut queries = vec![];
+    for qry in id.query_receipts(about, std::slice::from_ref(witness_id))? {
         let encoded = qry
             .encode()
             .map_err(|e| Error::EncodingError(e.to_string()))?;
         let sig = SelfSigningPrefix::new(km.signing_code(), km.sign_data(&encoded)?)?;
-        let result = id.finalize_query_mailbox(vec![(qry, sig)]).await?;
-        actions.extend(result);
+        queries.push((qry, sig));
     }
-    Ok(actions)
+    // A witness's errors (it does not hold the log yet) are no failure:
+    // its receipts come with a later call.
+    id.finalize_query_receipts(queries).await?;
+    Ok(())
+}
+
+/// [`collect_receipts`] for the identifier itself.
+async fn own_receipts<S: SigningBackend>(
+    id: &mut Identifier,
+    km: &S,
+    witness_id: &BasicPrefix,
+) -> Result<()> {
+    let own = id.id().clone();
+    collect_receipts(id, km, &own, witness_id).await
+}
+
+/// Takes forwards delivered to this identifier, or to a group it is a
+/// member of (a group event to co-sign, a delegation request, a
+/// delegation approval), and returns the requests that need this
+/// identifier's decision. The senders' key event logs must be known
+/// locally.
+///
+/// # Errors
+/// - [`Error::Controller`] if a forward does not verify.
+pub async fn receive_forwards(id: &mut Identifier, stream: &[u8]) -> Result<Vec<PendingRequest>> {
+    Ok(id
+        .receive_forwards(stream)
+        .await?
+        .into_iter()
+        .filter_map(|action| PendingRequest::try_from(action).ok())
+        .collect())
 }
 
 // ── Delegation operations ────────────────────────────────────────────────────
 
 /// Approve a pending delegation request (delegator side).
 ///
-/// Signs the delegating IXN event, notifies witnesses, queries the mailbox
-/// for receipts, and sends the exchange message (approval notification) to
-/// the delegatee via witnesses.
+/// Signs the delegating IXN event, notifies witnesses, collects their
+/// receipts, and returns the approval: the forward to deliver to the
+/// delegatee.
 ///
-/// The `request` is typically obtained by calling
-/// [`query_mailbox`] and converting the resulting
-/// [`ActionRequired::DelegationRequest`] into a [`DelegationRequest`].
+/// The `request` is typically obtained from [`receive_forwards`].
 ///
 /// # Errors
 /// - [`Error::Mechanics`] on network failures.
@@ -461,7 +501,7 @@ pub async fn approve_delegation<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
     request: DelegationRequest,
-) -> Result<()> {
+) -> Result<Forward> {
     let encoded_ixn = request
         .delegating_event
         .encode()
@@ -478,33 +518,32 @@ pub async fn approve_delegation<S: SigningBackend + Clone + 'static>(
         .await?;
     id.notify_witnesses().await?;
 
-    // Query mailbox for IXN receipts.
+    // Collect the IXN's receipts.
     let witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in &witnesses {
-        _query_mailbox(id, signer, witness).await?;
+        own_receipts(id, signer, witness).await?;
     }
 
-    // Send exchange (approval) to delegatee via witnesses.
+    // The approval, for the delegatee.
     let sig_exn = wrap_sig(signer, &encoded_exn)?;
     let data_signature = IndexedSignature::new_both_same(sig_ixn, 0);
     let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
     id.finalize_exchange(&encoded_exn, exn_index_sig, &request.delegating_event, data_signature)
-        .await?;
-
-    Ok(())
 }
 
 // ── Multisig operations ──────────────────────────────────────────────────────
 
 /// Request a delegated identifier (delegatee side, step 1 of 2).
 ///
-/// Sends a delegation request to the delegator specified in `config`.
+/// Makes a delegation request for the delegator specified in `config`.
 /// The returned identifier is **not** yet accepted — the delegator must
 /// approve it first (see [`approve_delegation`]).
 ///
-/// After approval, call [`complete_delegation`] with the returned values.
+/// Deliver the returned forwards (the request) to the delegator. Once its
+/// approval is delivered back, take it with [`receive_forwards`] and call
+/// [`complete_delegation`].
 ///
-/// Returns `(identifier_handle, delegated_prefix)`.
+/// Returns `(identifier_handle, delegated_prefix, forwards)`.
 ///
 /// # Errors
 /// - [`Error::Controller`] on event generation failures.
@@ -515,7 +554,7 @@ pub async fn request_delegation<S: SigningBackend + Clone + 'static>(
     signer: S,
     next_pk: BasicPrefix,
     config: DelegationConfig,
-) -> Result<(Identifier, IdentifierPrefix)> {
+) -> Result<(Identifier, IdentifierPrefix, Vec<Forward>)> {
     let controller = Controller::new(db_path)?;
     request_delegation_with_controller(&controller, signer, next_pk, config).await
 }
@@ -529,7 +568,7 @@ pub async fn request_delegation_with_controller<S: SigningBackend + Clone + 'sta
     signer: S,
     next_pk: BasicPrefix,
     config: DelegationConfig,
-) -> Result<(Identifier, IdentifierPrefix)> {
+) -> Result<(Identifier, IdentifierPrefix, Vec<Forward>)> {
     // Create a temporary identifier (needed by incept_group).
     let temp_config = IdentifierConfig {
         witnesses: config.witnesses.clone(),
@@ -573,7 +612,7 @@ pub async fn request_delegation_with_controller<S: SigningBackend + Clone + 'sta
     let sig_exn = wrap_sig(&signer, delegation_exn.as_bytes())?;
     let exn_index_sig = temp_id.sign_with_index(sig_exn, 0)?;
 
-    let delegated_prefix = temp_id
+    let (delegated_prefix, forwards) = temp_id
         .finalize_group_incept(
             dip.as_bytes(),
             sig_icp,
@@ -581,67 +620,45 @@ pub async fn request_delegation_with_controller<S: SigningBackend + Clone + 'sta
         )
         .await?;
 
-    Ok((temp_id, delegated_prefix))
+    Ok((temp_id, delegated_prefix, forwards))
 }
 
 /// Complete the delegation after the delegator has approved (delegatee
 /// side, step 2 of 2).
 ///
-/// Retrieves the delegator's key event log from the local database
-/// and queries the delegated identifier's mailbox to finalise acceptance.
+/// Takes the approval forward delivered from the delegator (its delegating
+/// event), which lets the delegated inception go to the witnesses, and
+/// collects their receipts so the delegated identifier is accepted.
 ///
 /// # Preconditions
-/// The delegator's OOBI must have been resolved beforehand so that their
-/// key event log is available locally (e.g. via
+/// The delegator's key event log must be known locally (e.g. via
 /// `identifier.resolve_oobi(&delegator_oobi)`).
 ///
 /// # Errors
 /// - [`Error::DelegatorKelNotAvailable`] if the delegator's events are
 ///   not in the local database. Resolve the delegator's OOBI first.
 /// - [`Error::NoWitnesses`] if the identifier has no witnesses configured.
-/// - [`Error::Mechanics`] on network or mailbox failures.
+/// - [`Error::Controller`] if the approval does not verify.
+/// - [`Error::Mechanics`] on network failures.
 /// - [`Error::Signing`] if signing fails.
 pub async fn complete_delegation<S: SigningBackend + Clone + 'static>(
     temp_id: &mut Identifier,
     signer: &S,
     delegated_prefix: &IdentifierPrefix,
     delegator_id: &IdentifierPrefix,
+    approval: &[u8],
 ) -> Result<()> {
-    // Get witnesses from identifier state.
     let witnesses: Vec<BasicPrefix> = temp_id.witnesses();
     if witnesses.is_empty() {
         return Err(Error::NoWitnesses(temp_id.id().clone()));
     }
-
-    // Get delegator's KEL from local DB.
-    let delegator_kel = temp_id
-        .get_kel(delegator_id)
-        .ok_or_else(|| Error::DelegatorKelNotAvailable(delegator_id.clone()))?;
-
-    // Save the delegator's KEL notices into local DB.
-    for notice in &delegator_kel {
-        temp_id.save_notice(notice)?;
+    if temp_id.get_kel(delegator_id).is_none() {
+        return Err(Error::DelegatorKelNotAvailable(delegator_id.clone()));
     }
-
-    // The delegated inception is not accepted yet, or this call would
-    // have nothing to do. Its witness receipt may already have been
-    // read out of the mailbox on an earlier attempt — before the
-    // delegating anchor was in hand, so it could not be applied — and
-    // mailbox reads do not rewind on their own. Ask for the whole
-    // mailbox again so that receipt is served a second time; otherwise
-    // the inception waits forever on something already delivered.
-    if temp_id.find_state(delegated_prefix).is_err() {
-        temp_id.reset_group_mailbox_index(delegated_prefix, &witnesses)?;
-    }
-
-    // Query mailbox for the delegated identifier (two rounds).
+    temp_id.receive_forwards(approval).await?;
     for witness in &witnesses {
-        _query_mailbox_for(temp_id, signer, delegated_prefix, witness).await?;
+        collect_receipts(temp_id, signer, delegated_prefix, witness).await?;
     }
-    for witness in &witnesses {
-        _query_mailbox_for(temp_id, signer, delegated_prefix, witness).await?;
-    }
-
     Ok(())
 }
 
@@ -656,7 +673,7 @@ pub async fn complete_delegation<S: SigningBackend + Clone + 'static>(
 /// this entry point also returns the raw CESR string of the `dip`,
 /// so the caller can deliver it directly to the delegator over an
 /// out-of-band channel (e.g. a peer-to-peer connection) instead of
-/// the witness mailbox.
+/// a forward.
 ///
 /// After the delegator returns the signed delegating `ixn`, call
 /// [`finalize_delegation_with_seal`] on the returned identifier.
@@ -726,7 +743,8 @@ pub async fn build_delegation_request_with_controller<S: SigningBackend + Clone 
     let sig_exn = wrap_sig(&signer, delegation_exn.as_bytes())?;
     let exn_index_sig = temp_id.sign_with_index(sig_exn, 0)?;
 
-    let delegated_prefix = temp_id
+    // The request travels as the signed `dip` itself, out of band.
+    let (delegated_prefix, _forwards) = temp_id
         .finalize_group_incept(
             dip.as_bytes(),
             sig_icp,
@@ -765,15 +783,16 @@ pub async fn build_delegation_request_with_controller<S: SigningBackend + Clone 
 /// `participants = vec![delegator_id.id().clone()]`. For a multi-sig
 /// group pass the group AID and the full member list.
 ///
-/// Does NOT call [`Identifier::notify_witnesses`] or any mailbox
-/// helper — the caller is responsible for transport.
+/// Does NOT call [`Identifier::notify_witnesses`] — the caller is
+/// responsible for transport: of the signed `ixn` to the delegatee, and of
+/// the returned forwards to the other group members.
 pub async fn build_delegation_approval<S: SigningBackend + Clone + 'static>(
     delegator_id: &mut Identifier,
     signer: &S,
     group_id: &IdentifierPrefix,
     delegated_dip_cesr: &str,
     participants: &[IdentifierPrefix],
-) -> Result<String> {
+) -> Result<(String, Vec<Forward>)> {
     use keri_core::event::sections::seal::{EventSeal, Seal};
     use keri_core::event_message::cesr_adapter::{parse_event_type, EventType};
     use keri_core::event_message::signed_event_message::Notice;
@@ -808,7 +827,7 @@ pub async fn build_delegation_approval<S: SigningBackend + Clone + 'static>(
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
 
-    delegator_id
+    let forwards = delegator_id
         .finalize_group_event(ixn_cesr.as_bytes(), sig_ixn.clone(), exchange_pairs)
         .await?;
 
@@ -841,7 +860,8 @@ pub async fn build_delegation_approval<S: SigningBackend + Clone + 'static>(
     ))
     .to_cesr()
     .map_err(|e| Error::EncodingError(e.to_string()))?;
-    String::from_utf8(encoded).map_err(|e| Error::EncodingError(e.to_string()))
+    let encoded = String::from_utf8(encoded).map_err(|e| Error::EncodingError(e.to_string()))?;
+    Ok((encoded, forwards))
 }
 
 /// Build the unsigned delegating `ixn` event that anchors the supplied
@@ -905,8 +925,8 @@ pub async fn finalize_delegation_ixn_multi(
 }
 
 /// Push every event currently queued via `to_notify` to the
-/// caller-identifier's witnesses and then poll each witness mailbox
-/// once for receipts. Wraps the witness/mailbox legs of
+/// caller-identifier's witnesses and then collect each witness's
+/// receipts. Wraps the witness legs of
 /// [`approve_delegation`] so other callers (notably the cosigned
 /// delegation flow) can reuse them without duplicating the loop.
 pub async fn publish_event_and_collect_receipts<S: SigningBackend + Clone + 'static>(
@@ -916,7 +936,7 @@ pub async fn publish_event_and_collect_receipts<S: SigningBackend + Clone + 'sta
     id.notify_witnesses().await?;
     let witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in &witnesses {
-        _query_mailbox(id, signer, witness).await?;
+        own_receipts(id, signer, witness).await?;
     }
     Ok(())
 }
@@ -961,14 +981,15 @@ pub async fn finalize_delegation_with_seal(
 /// 1-of-N group the caller is the only member needed; the list is
 /// still used to route exchange messages to other members.
 ///
-/// Notifies witnesses and queries mailboxes when configured.
+/// Notifies witnesses and collects receipts; returns the forwards to
+/// deliver to the other members.
 pub async fn anchor_group<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
     group_id: &IdentifierPrefix,
     anchors: &[SelfAddressingIdentifier],
     participants: &[IdentifierPrefix],
-) -> Result<()> {
+) -> Result<Vec<Forward>> {
     let (ixn_cesr, exn_messages) = id.anchor_group(group_id, anchors, participants)?;
 
     let sig_ixn = wrap_sig(signer, ixn_cesr.as_bytes())?;
@@ -980,20 +1001,21 @@ pub async fn anchor_group<S: SigningBackend + Clone + 'static>(
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
 
-    id.finalize_group_event(ixn_cesr.as_bytes(), sig_ixn, exchange_pairs)
+    let forwards = id
+        .finalize_group_event(ixn_cesr.as_bytes(), sig_ixn, exchange_pairs)
         .await?;
     id.notify_witnesses().await?;
 
     let caller_witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in &caller_witnesses {
-        _query_mailbox(id, signer, witness).await?;
+        own_receipts(id, signer, witness).await?;
     }
     let group_witnesses = id.find_state(group_id)?.witness_config.witnesses;
     for witness in &group_witnesses {
-        _query_mailbox_for(id, signer, group_id, witness).await?;
+        collect_receipts(id, signer, group_id, witness).await?;
     }
 
-    Ok(())
+    Ok(forwards)
 }
 
 /// Out-of-band variant of [`anchor_group`]: build the `ixn` event,
@@ -1002,8 +1024,8 @@ pub async fn anchor_group<S: SigningBackend + Clone + 'static>(
 /// [`MultisigRequest`] via [`MultisigRequest::from_cesr`] and call
 /// [`accept_multisig`].
 ///
-/// Does NOT call [`Identifier::notify_witnesses`] or any mailbox
-/// helper. The caller's signature is still applied locally.
+/// Does NOT call [`Identifier::notify_witnesses`]. The caller's signature
+/// is still applied locally.
 pub async fn build_group_anchor<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
@@ -1022,7 +1044,9 @@ pub async fn build_group_anchor<S: SigningBackend + Clone + 'static>(
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
 
-    id.finalize_group_event(ixn_cesr.as_bytes(), sig_ixn, exchange_pairs)
+    // The exchange messages returned travel out of band instead.
+    let _forwards = id
+        .finalize_group_event(ixn_cesr.as_bytes(), sig_ixn, exchange_pairs)
         .await?;
 
     Ok((ixn_cesr, exn_messages))
@@ -1030,12 +1054,12 @@ pub async fn build_group_anchor<S: SigningBackend + Clone + 'static>(
 
 /// Create a multisig identifier (initiator side).
 ///
-/// Generates the group inception event, signs it, and sends invitations
-/// to all other members via witnesses. The identifier is **not** yet
-/// accepted — other members must co-sign via [`accept_multisig`], and
+/// Generates the group inception event, signs it, and returns the
+/// invitations to deliver to the other members. The identifier is **not**
+/// yet accepted — other members must co-sign via [`accept_multisig`], and
 /// all members must call [`sync_multisig`] to finalise.
 ///
-/// Returns the multisig `IdentifierPrefix`.
+/// Returns the multisig `IdentifierPrefix` and the invitations.
 ///
 /// # Preconditions
 /// - `id` must be a fully established individual identifier with witnesses.
@@ -1049,7 +1073,7 @@ pub async fn create_multisig<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
     config: MultisigConfig,
-) -> Result<IdentifierPrefix> {
+) -> Result<(IdentifierPrefix, Vec<Forward>)> {
     let witness_ids: Vec<BasicPrefix> = config
         .witnesses
         .iter()
@@ -1080,19 +1104,16 @@ pub async fn create_multisig<S: SigningBackend + Clone + 'static>(
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
 
-    let group_prefix = id
-        .finalize_group_incept(icp.as_bytes(), sig_icp, exchange_pairs)
-        .await?;
-
-    Ok(group_prefix)
+    id.finalize_group_incept(icp.as_bytes(), sig_icp, exchange_pairs)
+        .await
 }
 
 /// Rotate the keys of an established multisig (group) identifier.
 ///
 /// Builds a `rot` event against `group_id`, signs it with the caller's
-/// `signer`, signs and forwards an exchange message to every other
-/// remaining member, finalises the local state, and synchronises with
-/// witnesses on both the caller's and the group's mailbox planes.
+/// `signer`, signs an exchange message for every other remaining member,
+/// finalises the local state, collects the caller's and the group's
+/// receipts, and returns the forwards to deliver to the other members.
 ///
 /// `config.new_participants` is the full post-rotation member set. The
 /// caller (the local identifier) does not need to appear in it
@@ -1117,7 +1138,7 @@ pub async fn rotate_group<S: SigningBackend + Clone + 'static>(
     signer: &S,
     group_id: &IdentifierPrefix,
     config: GroupRotationConfig,
-) -> Result<()> {
+) -> Result<Vec<Forward>> {
     let (rot_event, exn_messages) = id
         .rotate_group(
             group_id,
@@ -1139,20 +1160,21 @@ pub async fn rotate_group<S: SigningBackend + Clone + 'static>(
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
 
-    id.finalize_group_event(rot_event.as_bytes(), sig_rot, exchange_pairs)
+    let forwards = id
+        .finalize_group_event(rot_event.as_bytes(), sig_rot, exchange_pairs)
         .await?;
     id.notify_witnesses().await?;
 
     let caller_witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in &caller_witnesses {
-        _query_mailbox(id, signer, witness).await?;
+        own_receipts(id, signer, witness).await?;
     }
     let group_witnesses = id.find_state(group_id)?.witness_config.witnesses;
     for witness in &group_witnesses {
-        _query_mailbox_for(id, signer, group_id, witness).await?;
+        collect_receipts(id, signer, group_id, witness).await?;
     }
 
-    Ok(())
+    Ok(forwards)
 }
 
 /// Abandon a multisig group identifier, or a delegated identifier through
@@ -1174,7 +1196,7 @@ pub async fn abandon_group<S: SigningBackend + Clone + 'static>(
     signer: &S,
     group_id: &IdentifierPrefix,
     config: GroupAbandonConfig,
-) -> Result<()> {
+) -> Result<Vec<Forward>> {
     let (event, exn_messages) = id
         .abandon_group(
             group_id,
@@ -1192,26 +1214,27 @@ pub async fn abandon_group<S: SigningBackend + Clone + 'static>(
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
 
-    id.finalize_group_event(event.as_bytes(), sig, exchange_pairs)
+    let forwards = id
+        .finalize_group_event(event.as_bytes(), sig, exchange_pairs)
         .await?;
     id.notify_witnesses().await?;
 
     let group_witnesses = id.find_state(group_id)?.witness_config.witnesses;
     for witness in &group_witnesses {
-        _query_mailbox_for(id, signer, group_id, witness).await?;
+        collect_receipts(id, signer, group_id, witness).await?;
     }
 
-    Ok(())
+    Ok(forwards)
 }
 
-/// Accept a pending group event discovered in the mailbox (joiner side).
+/// Accept a pending group event delivered to this member (joiner side).
 ///
 /// Handles both group inceptions and group rotations: the underlying
 /// `finalize_group_event` is event-type agnostic and the index-discovery
 /// helper dispatches on event-data variant.
 ///
-/// Co-signs the event and forwards the signature to other members via
-/// witnesses. The `request` is obtained from [`poll_pending_requests`]
+/// Co-signs the event and returns the forwards that carry the signature to
+/// the other members. The `request` is obtained from [`receive_forwards`]
 /// or by converting an `ActionRequired::MultisigRequest`.
 ///
 /// # Errors
@@ -1222,7 +1245,7 @@ pub async fn accept_multisig<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
     request: MultisigRequest,
-) -> Result<()> {
+) -> Result<Vec<Forward>> {
     let encoded_event = request
         .event
         .encode()
@@ -1241,78 +1264,40 @@ pub async fn accept_multisig<S: SigningBackend + Clone + 'static>(
         sig_event,
         vec![(encoded_exn, exn_index_sig)],
     )
-    .await?;
-
-    Ok(())
+    .await
 }
 
-/// Synchronise the multisig identifier state.
-///
-/// Queries the multisig identifier's mailbox to collect co-signatures
-/// from other members and witness receipts. Must be called by **all**
-/// members after enough co-signatures have been submitted.
+/// Synchronise the multisig identifier state: collect the group's
+/// receipts from its witnesses. Co-signatures from other members arrive as
+/// forwards ([`receive_forwards`]). Call it after enough co-signatures
+/// have been delivered.
 ///
 /// After this call, verify acceptance with
 /// `id.find_state(multisig_id)`.
 ///
 /// # Errors
-/// - [`Error::NoWitnesses`] if the identifier has no witnesses configured.
-/// - [`Error::Mechanics`] on network or mailbox failures.
+/// - [`Error::NoWitnesses`] if neither the group nor the identifier has
+///   witnesses configured.
+/// - [`Error::Mechanics`] on network failures.
 /// - [`Error::Signing`] if signing fails.
 pub async fn sync_multisig<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
     multisig_id: &IdentifierPrefix,
 ) -> Result<()> {
-    let witnesses: Vec<BasicPrefix> = id.witnesses();
+    // A group not accepted yet has no state: its witnesses are then taken
+    // to be the member's, as the group's inception names them.
+    let witnesses: Vec<BasicPrefix> = id
+        .find_state(multisig_id)
+        .map(|state| state.witness_config.witnesses)
+        .unwrap_or_else(|_| id.witnesses());
     if witnesses.is_empty() {
         return Err(Error::NoWitnesses(id.id().clone()));
     }
-
-    // Round 1: collect co-signatures from other members.
     for witness in &witnesses {
-        _query_mailbox_for(id, signer, multisig_id, witness).await?;
+        collect_receipts(id, signer, multisig_id, witness).await?;
     }
-
-    // Round 2: collect witness receipts.
-    for witness in &witnesses {
-        _query_mailbox_for(id, signer, multisig_id, witness).await?;
-    }
-
     Ok(())
-}
-
-/// Poll for pending delegation or multisig requests in this
-/// identifier's mailbox.
-///
-/// Returns all discovered requests as [`PendingRequest`] items. Use
-/// [`PendingRequest::into_delegation`] or
-/// [`PendingRequest::into_multisig`] to extract the specific type and
-/// pass it to [`approve_delegation`] or [`accept_multisig`].
-///
-/// # Errors
-/// - [`Error::NoWitnesses`] if the identifier has no witnesses configured.
-/// - [`Error::Mechanics`] on network failures.
-/// - [`Error::Signing`] if signing fails.
-pub async fn poll_pending_requests<S: SigningBackend + Clone + 'static>(
-    id: &mut Identifier,
-    signer: &S,
-) -> Result<Vec<PendingRequest>> {
-    let own_id = id.id().clone();
-    let witnesses: Vec<BasicPrefix> = id.witnesses();
-    if witnesses.is_empty() {
-        return Err(Error::NoWitnesses(own_id));
-    }
-    let mut requests = vec![];
-    for witness in &witnesses {
-        let actions = _query_mailbox_for(id, signer, &own_id, witness).await?;
-        for action in actions {
-            if let Ok(req) = PendingRequest::try_from(action) {
-                requests.push(req);
-            }
-        }
-    }
-    Ok(requests)
 }
 
 /// Co-sign a pending group event delivered as persisted JSON (joiner side).
@@ -1323,7 +1308,8 @@ pub async fn poll_pending_requests<S: SigningBackend + Clone + 'static>(
 /// message at key index 0, then dispatches on the event type: group (or
 /// delegated) inceptions are finalised with `finalize_group_incept` and
 /// return `Some(group_prefix)`; all other group events (rotations, anchors)
-/// are finalised with `finalize_group_event` and return `None`.
+/// are finalised with `finalize_group_event` and return `None`. The
+/// forwards returned carry the signature to the other members.
 ///
 /// # Errors
 /// - [`Error::EncodingError`] if the JSON or event encoding is invalid.
@@ -1334,7 +1320,7 @@ pub async fn accept_multisig_event<S: SigningBackend + Clone + 'static>(
     signer: &S,
     event_json: &str,
     exchange_jsons: &[String],
-) -> Result<Option<IdentifierPrefix>> {
+) -> Result<(Option<IdentifierPrefix>, Vec<Forward>)> {
     use keri_core::event_message::EventTypeTag;
 
     let event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent> =
@@ -1359,49 +1345,18 @@ pub async fn accept_multisig_event<S: SigningBackend + Clone + 'static>(
 
     match event.event_type {
         EventTypeTag::Icp | EventTypeTag::Dip => {
-            let group_prefix = id
+            let (group_prefix, forwards) = id
                 .finalize_group_incept(&encoded_event, sig_event, signed_exchanges)
                 .await?;
-            Ok(Some(group_prefix))
+            Ok((Some(group_prefix), forwards))
         }
         _ => {
-            id.finalize_group_event(&encoded_event, sig_event, signed_exchanges)
+            let forwards = id
+                .finalize_group_event(&encoded_event, sig_event, signed_exchanges)
                 .await?;
-            Ok(None)
+            Ok((None, forwards))
         }
     }
-}
-
-/// Poll for pending requests addressed to a group identifier.
-///
-/// Queries the caller's own witnesses about `group_id` and returns the
-/// discovered requests (e.g. group events from other members awaiting
-/// co-signature). Counterpart of [`poll_pending_requests`], which polls
-/// the identifier's own mailbox.
-///
-/// # Errors
-/// - [`Error::NoWitnesses`] if the identifier has no witnesses configured.
-/// - [`Error::Mechanics`] on network failures.
-/// - [`Error::Signing`] if signing fails.
-pub async fn poll_group_requests<S: SigningBackend + Clone + 'static>(
-    id: &mut Identifier,
-    signer: &S,
-    group_id: &IdentifierPrefix,
-) -> Result<Vec<PendingRequest>> {
-    let witnesses: Vec<BasicPrefix> = id.witnesses();
-    if witnesses.is_empty() {
-        return Err(Error::NoWitnesses(id.id().clone()));
-    }
-    let mut requests = vec![];
-    for witness in &witnesses {
-        let actions = _query_mailbox_for(id, signer, group_id, witness).await?;
-        for action in actions {
-            if let Ok(req) = PendingRequest::try_from(action) {
-                requests.push(req);
-            }
-        }
-    }
-    Ok(requests)
 }
 
 /// Build the forward exchange for a group event and the caller's signatures
@@ -1411,7 +1366,7 @@ pub(crate) async fn finalize_group_anchor<S: SigningBackend + Clone + 'static>(
     member: &IdentifierPrefix,
     signer: &S,
     ixn: &keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
-) -> Result<()> {
+) -> Result<Vec<Forward>> {
     use keri_core::actor::event_generator;
     use keri_core::event_message::signature::{Signature, SignerData};
     use keri_core::mailbox::exchange::ForwardTopic;
@@ -1444,6 +1399,5 @@ pub(crate) async fn finalize_group_anchor<S: SigningBackend + Clone + 'static>(
 
     group
         .finalize_group_event(&encoded_ixn, sig_ixn, vec![(exn, exn_index_sig)])
-        .await?;
-    Ok(())
+        .await
 }

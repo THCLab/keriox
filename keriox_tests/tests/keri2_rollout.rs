@@ -71,10 +71,10 @@ async fn incept(ctx: &InfrastructureContext, version: KeriVersion) -> Client {
 }
 
 async fn collect_receipts(id: &mut Identifier, keys: &CryptoBox, witness: &BasicPrefix) {
-    for qry in id.query_mailbox(id.id(), &[witness.clone()]).unwrap() {
+    for qry in id.query_receipts(id.id(), &[witness.clone()]).unwrap() {
         let signature =
             SelfSigningPrefix::Ed25519Sha512(keys.sign(&qry.encode().unwrap()).unwrap());
-        id.finalize_query_mailbox(vec![(qry, signature)])
+        id.finalize_query_receipts(vec![(qry, signature)])
             .await
             .unwrap();
     }

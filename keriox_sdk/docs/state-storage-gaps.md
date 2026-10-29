@@ -1,7 +1,7 @@
 # State storage: design and status
 
 `StorageConfig` (Redb | InMemory | Postgres) governs the **event
-databases**: KEL, TEL, OOBI storage, escrows and the mailbox query cache.
+databases**: KEL, registries, OOBI storage, escrows and the receipt cache.
 This document inventories every piece of SDK state and where it lives.
 
 > **Status:** all categories below are implemented. Alias metadata lives in
@@ -71,16 +71,15 @@ migration step.
 |---|---|---|
 | one event database **per alias** (`<alias>/db`) | each alias opens its own KEL/TEL/escrow set | N aliases = N redb files and N controller stacks; contacts make it worse |
 | one database **per contact** (`.contacts/<aid>/db`) | full controller stack per imported contact | importing 50 contacts opens 50 redb databases |
-| mailbox query cache (`<alias>/db/query_cache`) | separate redb per alias | covered by `StorageConfig` already, listed for completeness |
+| receipt cache (`<alias>/db/query_cache`) | separate redb per alias | covered by `StorageConfig` already, listed for completeness |
 
 **Implemented:** new stores share a single event database (`<root>/db`)
 across all aliases and contacts; stores that already have per-alias
 databases are detected and keep their layout permanently (the decision is
 persisted in the metadata database). Landing this exposed an upstream bug:
-the controller's mailbox query cache and published-receipt cache were
-keyed by witness only, so identifiers sharing one database consumed each
-other's mailbox read positions — both caches are now keyed by
-(identifier, witness).
+the controller's published-receipt cache was keyed by witness only, so
+identifiers sharing one database mixed up which receipts each had passed
+on — it is now keyed by (identifier, witness).
 
 ## Deployment matrix
 
@@ -92,8 +91,8 @@ other's mailbox read positions — both caches are now keyed by
 | server-side Postgres | `Postgres` (events) | meta db (local redb) | KMS/HSM via keyprovider |
 
 The Postgres deployment keeps a few small local files per installation: the
-metadata database, the mailbox query cache (read positions are
-per-process), and — for software keys — the seed files. These are
+metadata database, the receipt cache, and — for software keys — the seed
+files. These are
 installation-local state, not shared event data; the events themselves
 (KEL, TEL, OOBIs, escrows) are in Postgres and shared across installations
 pointed at the same database.

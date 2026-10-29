@@ -597,6 +597,7 @@ impl Keri {
             alias: alias.to_string(),
             delegated,
             delegator,
+            requests: vec![],
         }))
     }
 

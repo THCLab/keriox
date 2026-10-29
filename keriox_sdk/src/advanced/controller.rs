@@ -49,8 +49,8 @@ impl Controller {
 
     /// Create a controller whose event databases live in Postgres.
     ///
-    /// `db_path` still hosts the small redb file for the mailbox query
-    /// cache (read positions are local, per-process state).
+    /// `db_path` still hosts the small redb file of the receipt cache
+    /// (receipts already passed on to each witness).
     #[cfg(feature = "storage-postgres")]
     pub async fn new_postgres(db_path: PathBuf, database_url: &str) -> Result<Self> {
         let config = ControllerConfig {

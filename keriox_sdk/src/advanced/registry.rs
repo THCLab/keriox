@@ -19,8 +19,8 @@ use teliox::registry::{Blinding, Pending, Policy, Presentation, Verdict};
 
 use crate::advanced::{
     error::{Error, Result},
-    identifier::Identifier,
-    operations::{finalize_group_anchor, query_mailbox, wrap_sig, SigningBackend},
+    identifier::{Forward, Identifier},
+    operations::{collect_receipts, finalize_group_anchor, wrap_sig, SigningBackend},
 };
 
 fn said(text: &str) -> Result<SelfAddressingIdentifier> {
@@ -43,7 +43,8 @@ async fn anchor<S: SigningBackend + Clone + 'static>(
     id.finalize_registry_events(pending, &encoded, sig).await?;
     id.notify_witnesses().await?;
     for witness in &id.find_state(id.id())?.witness_config.witnesses {
-        query_mailbox(id, signer.clone(), witness).await?;
+        let own = id.id().clone();
+        collect_receipts(id, signer, &own, witness).await?;
     }
     Ok(())
 }
@@ -145,8 +146,9 @@ pub fn verify(id: &Identifier, presentation: &Presentation, policy: &Policy) -> 
 
 /// Issues a credential from a group identifier, as the member who starts
 /// it: the anchoring `ixn` goes to the other members to sign, and the
-/// registry is kept by this member. Returns the presentation and the
-/// digest of the anchoring `ixn`.
+/// registry is kept by this member. Returns the presentation, the digest
+/// of the anchoring `ixn`, and the forwards to deliver to the other
+/// members.
 ///
 /// # Errors
 /// As [`issue`].
@@ -156,7 +158,7 @@ pub async fn issue_group<S, F>(
     signer: &S,
     blinding: &Blinding,
     build: F,
-) -> Result<(Presentation, SelfAddressingIdentifier)>
+) -> Result<(Presentation, SelfAddressingIdentifier, Vec<Forward>)>
 where
     S: SigningBackend + Clone + 'static,
     F: FnOnce(&SelfAddressingIdentifier) -> std::result::Result<Acdc, acdc::error::Error>,
@@ -175,7 +177,7 @@ where
     let digest = ixn
         .digest()
         .map_err(|e| Error::EncodingError(e.to_string()))?;
-    finalize_group_anchor(group, member, signer, &ixn).await?;
+    let forwards = finalize_group_anchor(group, member, signer, &ixn).await?;
     group.commit_registry_events(&pending)?;
-    Ok((presentation(group, acdc)?, digest))
+    Ok((presentation(group, acdc)?, digest, forwards))
 }

@@ -38,7 +38,7 @@ async fn a_contact_follows_a_reincepted_identity(infra: &mut TestInfra) {
         .unwrap()
         .with_keri_version(KeriVersion::V2_0);
     let config = store.same_witnesses("alice").unwrap();
-    let (successor, _signer) = store
+    let (successor, _signer, _requests) = store
         .reincept("alice", "alice-2", config)
         .await
         .expect("re-inception");

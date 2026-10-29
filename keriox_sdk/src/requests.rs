@@ -1,14 +1,15 @@
-//! Pending multi-party requests, surfaced by
-//! [`crate::Identity::pending_requests`].
+//! Pending multi-party requests, surfaced by [`crate::Identity::receive`].
 //!
 //! Delegation (and group membership, see [`crate::group`]) involves more
-//! than one party, so it cannot be a single call: one side starts the flow,
-//! the other finds the request in their witness mailbox and approves it.
+//! than one party, so it cannot be a single call: one side starts the flow
+//! and delivers its message ([`crate::Outgoing`]), the other takes it with
+//! `receive` and approves it, delivering its answer back.
 //! Each variant here wraps everything needed to act on a request with one
 //! method call — no event or signature handling required.
 
 use std::sync::Arc;
 
+use crate::delivery::Outgoing;
 use crate::error::Result;
 use crate::ids::IdentityId;
 use crate::keri::KeriInner;
@@ -73,13 +74,14 @@ impl DelegationApproval {
         IdentityId::from(self.inner.identifier())
     }
 
-    /// Approve: anchor the delegation in your key history, publish it
-    /// through your witnesses, and notify the requester.
-    pub async fn approve(self) -> Result<()> {
+    /// Approve: anchor the delegation in your key history and publish it
+    /// through your witnesses. Returns the approval to deliver to the
+    /// requester, addressed to the delegated identity.
+    pub async fn approve(self) -> Result<Outgoing> {
         let DelegationApproval { keri, alias, inner } = self;
         let signer = keri.store.load_signer(&alias)?;
         let retry = keri.retry.clone();
-        crate::retry::with_retry(&retry, || {
+        let forward = crate::retry::with_retry(&retry, || {
             let signer = signer.clone();
             let request = inner.clone();
             let keri = keri.clone();
@@ -94,7 +96,11 @@ impl DelegationApproval {
                 .await?)
             }
         })
-        .await
+        .await?;
+        Ok(Outgoing {
+            to: IdentityId::from(forward.to),
+            message: forward.message,
+        })
     }
 }
 
@@ -102,13 +108,15 @@ impl DelegationApproval {
 ///
 /// Returned by [`crate::IdentityBuilder::build_delegation_request`]. Keep it
 /// (or recover it after a restart with
-/// [`crate::Keri::delegation_in_progress`]) and call
-/// [`DelegationHandle::finalize`] once the delegator has approved.
+/// [`crate::Keri::delegation_in_progress`]), deliver its
+/// [`requests`](DelegationHandle::requests) to the delegator, and call
+/// [`DelegationHandle::finalize`] with the approval it sends back.
 pub struct DelegationHandle {
     pub(crate) keri: Arc<KeriInner>,
     pub(crate) alias: String,
     pub(crate) delegated: keri_controller::IdentifierPrefix,
     pub(crate) delegator: keri_controller::IdentifierPrefix,
+    pub(crate) requests: Vec<Outgoing>,
 }
 
 impl DelegationHandle {
@@ -122,13 +130,18 @@ impl DelegationHandle {
         IdentityId::from(self.delegator.clone())
     }
 
-    /// Complete the delegation after the delegator approved it.
-    ///
-    /// Collects the delegator's anchoring event from the witnesses and
-    /// returns the ready-to-use delegated [`crate::Identity`]. Fails with a
-    /// pending-approval error if the delegator has not approved yet — safe
-    /// to retry later.
-    pub async fn finalize(self) -> Result<crate::Identity> {
+    /// The request to deliver to the delegator. Empty for a handle
+    /// recovered after a restart: the request was made then.
+    pub fn requests(&self) -> &[Outgoing] {
+        &self.requests
+    }
+
+    /// Complete the delegation with the `approval` the delegator delivered
+    /// back ([`DelegationApproval::approve`]): take in its anchoring event,
+    /// collect the witnesses' receipts, and return the ready-to-use
+    /// delegated [`crate::Identity`]. Fails with a pending-approval error
+    /// while the witnesses have not receipted it yet — safe to retry.
+    pub async fn finalize(self, approval: &[u8]) -> Result<crate::Identity> {
         // complete_delegation needs the delegator's key history in this
         // identity's own database; copy it from wherever this store already
         // knows it (an own identity or an imported contact).
@@ -149,6 +162,7 @@ impl DelegationHandle {
                     &signer,
                     &delegated,
                     &delegator,
+                    approval,
                 )
                 .await?)
             }

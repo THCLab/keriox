@@ -145,21 +145,24 @@ async fn a_delegated_identity_is_abandoned_once_its_delegator_approves(infra: &m
         .build_delegation_request()
         .await
         .unwrap();
-    approve_delegation(&alice).await;
-    let phone = handle.finalize().await.unwrap();
+    let approval = approve_delegation(&alice, &handle.requests()[0].message).await;
+    let phone = handle.finalize(&approval.message).await.unwrap();
 
-    // The phone's abandonment is a delegated rotation: it waits for Alice.
-    assert!(matches!(
-        phone.abandon().await,
-        Err(Error::PendingApproval { .. })
-    ));
+    // The phone's abandonment is a delegated rotation: it waits for Alice,
+    // who is sent the request.
+    let requests = phone.abandon().await.unwrap();
+    let [request] = requests.as_slice() else {
+        panic!("one request, to the delegator: {requests:?}")
+    };
+    assert_eq!(&request.to, alice.id());
     assert!(!phone.is_abandoned().unwrap());
     assert!(matches!(
         phone.abandon().await,
         Err(Error::PendingApproval { .. })
     ));
 
-    approve_delegation(&alice).await;
+    let approval = approve_delegation(&alice, &request.message).await;
+    phone.receive(&approval.message).await.unwrap();
     phone.abandon().await.expect("approved abandonment");
     assert!(phone.is_abandoned().unwrap());
     let status = fetch_identifier_status(
@@ -176,9 +179,11 @@ async fn a_delegated_identity_is_abandoned_once_its_delegator_approves(infra: &m
     assert!(alice.is_abandoned().unwrap());
 }
 
-async fn approve_delegation(delegator: &keri_sdk::Identity) {
+/// The delegator takes `message`, a delegation request, and approves it;
+/// returns the approval.
+async fn approve_delegation(delegator: &keri_sdk::Identity, message: &[u8]) -> keri_sdk::Outgoing {
     let request = delegator
-        .pending_requests()
+        .receive(message)
         .await
         .unwrap()
         .into_iter()
@@ -188,7 +193,7 @@ async fn approve_delegation(delegator: &keri_sdk::Identity) {
             _ => None,
         })
         .expect("a pending delegation request");
-    request.approve().await.unwrap();
+    request.approve().await.unwrap()
 }
 
 /// Key providers block on their own runtime, so this runs on a

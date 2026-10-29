@@ -140,19 +140,18 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     let i = identifier.notify_witnesses().await?;
     dbg!(i);
 
-    let queries_to_sign = identifier.query_mailbox(
-        identifier.id(),
-        &[first_witness_id.clone(), second_witness_id.clone()],
-    )?;
-
     // Querying witnesses to get receipts
-    for qry in queries_to_sign {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
-        identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await
-            .unwrap();
-    }
+    let id = identifier.id().clone();
+    let queries = identifier
+        .query_receipts(&id, &[first_witness_id.clone(), second_witness_id.clone()])?
+        .into_iter()
+        .map(|qry| {
+            let signature =
+                SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
+            (qry, signature)
+        })
+        .collect();
+    identifier.finalize_query_receipts(queries).await?;
 
     let keys = identifier.current_public_keys()?;
     assert_eq!(keys, vec![first_pk.clone()]);
@@ -176,19 +175,17 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     identifier.notify_witnesses().await.unwrap();
 
     // Querying witnesses to get receipts
-    for qry in identifier
-        .query_mailbox(
-            &identifier.id(),
-            &[first_witness_id.clone(), second_witness_id.clone()],
-        )
-        .unwrap()
-    {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
-        identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await
-            .unwrap();
-    }
+    let id = identifier.id().clone();
+    let queries = identifier
+        .query_receipts(&id, &[first_witness_id.clone(), second_witness_id.clone()])?
+        .into_iter()
+        .map(|qry| {
+            let signature =
+                SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
+            (qry, signature)
+        })
+        .collect();
+    identifier.finalize_query_receipts(queries).await?;
 
     let keys = identifier.current_public_keys()?;
     assert_eq!(keys, vec![pk.clone()]);
@@ -215,7 +212,7 @@ async fn rotating_to_keys_we_do_not_hold_errors_instead_of_panicking()
         ..Default::default()
     })?;
 
-    let mut km = CryptoBox::new()?;
+    let km = CryptoBox::new()?;
     let inception_event = controller
         .incept(
             vec![BasicPrefix::Ed25519(km.public_key())],

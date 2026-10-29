@@ -95,7 +95,7 @@ async fn test_rotate_group_multi_party() -> Result<(), ControllerError> {
         let exn_sig = id_a.sign_with_index(sig_exn, 0)?;
         exn_pairs.push((exn.as_bytes().to_vec(), exn_sig));
     }
-    let group_id = id_a
+    let (group_id, _forwards) = id_a
         .finalize_group_incept(icp.as_bytes(), sig_icp_a, exn_pairs)
         .await?;
     let sig_icp_b = SelfSigningPrefix::Ed25519Sha512(km_b.sign(icp.as_bytes())?);
@@ -312,7 +312,7 @@ async fn create_1of2_group(
     let sig_icp_a = SelfSigningPrefix::Ed25519Sha512(km_a.sign(icp.as_bytes())?);
     let sig_exn_a = SelfSigningPrefix::Ed25519Sha512(km_a.sign(exns[0].as_bytes())?);
     let exn_sig_a = id_a.sign_with_index(sig_exn_a, 0)?;
-    let group_id = id_a
+    let (group_id, _forwards) = id_a
         .finalize_group_incept(
             icp.as_bytes(),
             sig_icp_a,

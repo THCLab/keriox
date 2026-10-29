@@ -6,7 +6,7 @@ use keri_controller::{
     KeyManager, Oobi, SelfSigningPrefix,
 };
 use keri_core::processor::validator::{MoreInfoError, VerificationError};
-use keri_tests::{settings::InfrastructureContext, wait_before_retry};
+use keri_tests::{collect_receipts, settings::InfrastructureContext, wait_before_retry};
 use tempfile::Builder;
 use test_context::test_context;
 
@@ -67,13 +67,13 @@ async fn indirect_mode_signing(ctx: &mut InfrastructureContext) -> Result<(), Co
 
     // Querying witness to get receipts
     for qry in signing_identifier
-        .query_mailbox(signing_identifier.id(), &[first_witness_id.clone()])
+        .query_receipts(signing_identifier.id(), &[first_witness_id.clone()])
         .unwrap()
     {
         let signature =
             SelfSigningPrefix::Ed25519Sha512(key_manager.sign(&qry.encode().unwrap()).unwrap());
         signing_identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
+            .finalize_query_receipts(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -126,14 +126,14 @@ async fn indirect_mode_signing(ctx: &mut InfrastructureContext) -> Result<(), Co
 
     // Querying witness to get receipts
     for qry in verifying_identifier
-        .query_mailbox(verifying_identifier.id(), &[first_witness_id.clone()])
+        .query_receipts(verifying_identifier.id(), &[first_witness_id.clone()])
         .unwrap()
     {
         let signature = SelfSigningPrefix::Ed25519Sha512(
             verifier_key_manager.sign(&qry.encode().unwrap()).unwrap(),
         );
         verifying_identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
+            .finalize_query_receipts(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -229,20 +229,15 @@ async fn indirect_mode_signing(ctx: &mut InfrastructureContext) -> Result<(), Co
     signing_identifier.notify_witnesses().await.unwrap();
 
     // Querying witnesses to get receipts
-    for qry in signing_identifier
-        .query_mailbox(
-            signing_identifier.id(),
-            &[first_witness_id.clone(), second_witness_id.clone()],
-        )
-        .unwrap()
-    {
-        let signature =
-            SelfSigningPrefix::Ed25519Sha512(key_manager.sign(&qry.encode().unwrap()).unwrap());
-        signing_identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await
-            .unwrap();
-    }
+    let signing_id = signing_identifier.id().clone();
+    collect_receipts(
+        &mut signing_identifier,
+        &key_manager,
+        &signing_id,
+        &[first_witness_id.clone(), second_witness_id.clone()],
+    )
+    .await
+    .unwrap();
 
     // Sign message with rotated keys.
     let second_message = "Hi".as_bytes();

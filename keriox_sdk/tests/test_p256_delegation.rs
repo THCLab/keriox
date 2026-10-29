@@ -98,7 +98,7 @@ async fn p256_delegation_single_aid_delegator() {
     let mut alice_mut = dlg_store.load("alice").unwrap();
     ingest_kel(&bob_id, &alice_mut);
 
-    let signed_ixn_cesr = operations::build_delegation_approval(
+    let (signed_ixn_cesr, _forwards) = operations::build_delegation_approval(
         &mut alice_mut,
         &alice_signer,
         &alice_prefix,
@@ -188,7 +188,7 @@ async fn mixed_curve_delegation_ed25519_delegator_p256_delegatee() {
     let mut alice_mut = dlg_store.load("alice").unwrap();
     ingest_kel(&bob_id, &alice_mut);
 
-    let signed_ixn_cesr = operations::build_delegation_approval(
+    let (signed_ixn_cesr, _forwards) = operations::build_delegation_approval(
         &mut alice_mut,
         &alice_signer,
         &alice_prefix,

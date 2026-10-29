@@ -1,13 +1,19 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
 use keri_controller::{
-    config::ControllerConfig, error::ControllerError, mailbox_updating::ActionRequired,
+    config::ControllerConfig,
+    error::ControllerError,
+    identifier::{mechanics::forwards::Forward, Identifier},
+    mailbox_updating::ActionRequired,
+    registry::RegistryStore,
     BasicPrefix, CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, RedbController,
     RedbIdentifier, SelfSigningPrefix,
 };
 use keri_core::{
     actor::error::ActorError,
+    database::{EscrowCreator, EventDatabase},
     mailbox::exchange::{Exchange, ForwardTopic},
+    oobi_manager::storage::OobiStorageBackend,
     prefix::IndexedSignature,
     transport::test::TestTransport,
 };
@@ -71,113 +77,126 @@ pub async fn setup_identifier(
 
     assert_eq!(verifier.notify_witnesses().await.unwrap(), 1);
 
-    // Querying mailbox to get receipts
-    for qry in verifier
-        .query_mailbox(verifier.id(), &witnesses_id)
-        .unwrap()
-    {
-        let signature = SelfSigningPrefix::Ed25519Sha512(
-            verifier_keypair.sign(&qry.encode().unwrap()).unwrap(),
-        );
-        let _act = verifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await
-            .unwrap();
-    }
+    // Asking the witnesses for the KEL to get receipts
+    let verifier_id = verifier.id().clone();
+    collect_receipts(
+        &mut verifier,
+        &verifier_keypair,
+        &verifier_id,
+        &witnesses_id,
+    )
+    .await
+    .unwrap();
     (verifier, verifier_keypair, verifier_controller)
 }
 
+/// Collects `about`'s receipts (`about` is `id` itself or a group it is a
+/// member of) by asking `witnesses` for its KEL, signing with `keypair`.
+pub async fn collect_receipts<D, T, S>(
+    id: &mut Identifier<D, T, S>,
+    keypair: &CryptoBox,
+    about: &IdentifierPrefix,
+    witnesses: &[BasicPrefix],
+) -> Result<(), ControllerError>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
+    let queries = id
+        .query_receipts(about, witnesses)?
+        .into_iter()
+        .map(|qry| {
+            let signature = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&qry.encode()?)?);
+            Ok((qry, signature))
+        })
+        .collect::<Result<Vec<_>, ControllerError>>()?;
+    id.finalize_query_receipts(queries).await?;
+    Ok(())
+}
+
+/// Lets a member of the delegator group `delegator_group_id` handle the
+/// `forwards` delivered to it: co-signs the group events it is asked to
+/// and approves the delegation request. Returns the forwards to deliver in
+/// turn: the signed group events, for the other members, and the approval,
+/// for the delegatee.
 pub async fn handle_delegation_request(
     id: &mut RedbIdentifier,
     keypair: &CryptoBox,
     witness_id: &[BasicPrefix],
     delegator_group_id: IdentifierPrefix,
     delegatee_id: &IdentifierPrefix,
-) -> Result<(), ControllerError> {
-    let query = id.query_mailbox(&delegator_group_id, witness_id)?;
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&qry.encode()?)?);
-        let ar = id.finalize_query_mailbox(vec![(qry, signature)]).await?;
-
-        for ar in ar {
-            match &ar {
-                ActionRequired::MultisigRequest(multisig_event, exn) => {
-                    let signature_ixn =
-                        SelfSigningPrefix::Ed25519Sha512(keypair.sign(&multisig_event.encode()?)?);
-                    let signature_exn =
-                        SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
-                    let kc = id.find_state(id.id()).unwrap().current;
-                    let index = id.index_in_current_keys(&kc)?;
-                    let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
+    forwards: &[u8],
+) -> Result<Vec<Forward>, ControllerError> {
+    let mut to_deliver = vec![];
+    for ar in id.receive_forwards(forwards).await? {
+        match &ar {
+            ActionRequired::MultisigRequest(multisig_event, exn) => {
+                let signature_ixn =
+                    SelfSigningPrefix::Ed25519Sha512(keypair.sign(&multisig_event.encode()?)?);
+                let signature_exn = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
+                let kc = id.find_state(id.id()).unwrap().current;
+                let index = id.index_in_current_keys(&kc)?;
+                let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
+                to_deliver.extend(
                     id.finalize_group_event(
                         &multisig_event.encode()?,
                         signature_ixn.clone(),
                         vec![(exn.encode()?, exn_index_signature)],
                     )
-                    .await?;
-                }
-                ActionRequired::DelegationRequest(delegating_event, exn) => {
-                    let signature_ixn = SelfSigningPrefix::Ed25519Sha512(
-                        keypair.sign(&delegating_event.encode()?)?,
-                    );
-                    let signature_exn =
-                        SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
-                    let kc = id.find_state(id.id()).unwrap().current;
-                    let index = id.index_in_current_keys(&kc)?;
-                    let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
+                    .await?,
+                );
+            }
+            ActionRequired::DelegationRequest(delegating_event, exn) => {
+                let signature_ixn =
+                    SelfSigningPrefix::Ed25519Sha512(keypair.sign(&delegating_event.encode()?)?);
+                let signature_exn = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
+                let kc = id.find_state(id.id()).unwrap().current;
+                let index = id.index_in_current_keys(&kc)?;
+                let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
+                to_deliver.extend(
                     id.finalize_group_event(
                         &delegating_event.encode()?,
                         signature_ixn.clone(),
                         vec![(exn.encode()?, exn_index_signature)],
                     )
-                    .await
-                    .unwrap();
-                    id.notify_witnesses().await?;
+                    .await?,
+                );
+                id.notify_witnesses().await?;
 
-                    // Query for receipts
-                    let query = id.query_mailbox(&delegator_group_id, witness_id)?;
+                // Query for receipts
+                collect_receipts(id, keypair, &delegator_group_id, witness_id).await?;
 
-                    for qry in query {
-                        let signature =
-                            SelfSigningPrefix::Ed25519Sha512(keypair.sign(&qry.encode()?)?);
-                        let _action_required =
-                            id.finalize_query_mailbox(vec![(qry, signature)]).await?;
-                        // assert!(action_required.is_empty());
-                    }
+                let kc = id.find_state(&delegator_group_id).unwrap().current;
+                let index = id.index_in_current_keys(&kc).unwrap();
+                // send accepted event to child
+                let exn_message = Exchange::forward(
+                    &delegatee_id,
+                    ForwardTopic::Delegate,
+                    &delegating_event.encode()?,
+                )
+                .to_message(
+                    &id.id(),
+                    &delegatee_id,
+                    SerializationFormats::JSON,
+                    HashFunctionCode::Blake3_256,
+                );
+                let signature_exn =
+                    SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn_message.encode()?)?);
 
-                    let kc = id.find_state(&delegator_group_id).unwrap().current;
-                    let index = id.index_in_current_keys(&kc).unwrap();
-                    // send accepted event to child
-                    let exn_message = Exchange::forward(
-                        &delegatee_id,
-                        ForwardTopic::Delegate,
-                        &delegating_event.encode()?,
-                    )
-                    .to_message(
-                        &id.id(),
-                        &delegatee_id,
-                        SerializationFormats::JSON,
-                        HashFunctionCode::Blake3_256,
-                    );
-                    let signature_exn =
-                        SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn_message.encode()?)?);
+                let data_signature = IndexedSignature::new_both_same(signature_ixn, index as u16);
 
-                    let data_signature =
-                        IndexedSignature::new_both_same(signature_ixn, index as u16);
-
-                    let kc = id.find_state(&id.id()).unwrap().current;
-                    let index = id.index_in_current_keys(&kc).unwrap();
-                    let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
-                    id.finalize_exchange(
-                        &exn_message.encode()?,
-                        exn_index_signature,
-                        &delegating_event,
-                        data_signature,
-                    )
-                    .await?;
-                }
-            };
-        }
+                let kc = id.find_state(&id.id()).unwrap().current;
+                let index = id.index_in_current_keys(&kc).unwrap();
+                let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
+                to_deliver.push(id.finalize_exchange(
+                    &exn_message.encode()?,
+                    exn_index_signature,
+                    &delegating_event,
+                    data_signature,
+                )?);
+            }
+        };
     }
-    Ok(())
+    Ok(to_deliver)
 }

@@ -323,12 +323,8 @@ async fn create_signer(idx: usize, witnesses: &[&WitnessHandle]) -> Result<Signe
     signer.notify_witnesses().await?;
 
     let wit_ids: Vec<BasicPrefix> = witnesses.iter().map(|w| w.id.clone()).collect();
-    for qry in signer.query_mailbox(signer.id(), &wit_ids)? {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode()?)?);
-        signer
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    let signer_id = signer.id().clone();
+    keri_tests::collect_receipts(&mut signer, &km, &signer_id, &wit_ids).await?;
 
     Ok(Signer {
         id: signer.id().clone(),

@@ -2,7 +2,9 @@ use keri_controller::{
     error::ControllerError, mailbox_updating::ActionRequired, KeyManager, SelfSigningPrefix,
 };
 use keri_core::actor::prelude::Message;
-use keri_tests::{handle_delegation_request, settings::InfrastructureContext, setup_identifier};
+use keri_tests::{
+    collect_receipts, handle_delegation_request, settings::InfrastructureContext, setup_identifier,
+};
 use tempfile::Builder;
 use test_context::test_context;
 
@@ -73,9 +75,9 @@ async fn multi_delegator_multi_delegatee(
     let exn_index_signature = delegator_identifier1.sign_with_index(signature_exn, 0)?;
 
     // Group initiator needs to use `finalize_group_incept` instead of just
-    // `finalize_event`, to send multisig request to other group participants.
-    // Identifier who get this request from mailbox, can use just `finalize_event`
-    let delegator_group_id = delegator_identifier1
+    // `finalize_event`: it returns the forwards that carry the multisig
+    // request to other group participants.
+    let (delegator_group_id, forwards) = delegator_identifier1
         .finalize_group_incept(
             group_inception.as_bytes(),
             signature_icp,
@@ -87,71 +89,65 @@ async fn multi_delegator_multi_delegatee(
     // Event is not yet accepted.
     assert!(kel.is_none());
 
-    // Querying mailbox to get multisig request
-    let query =
-        delegator_identifier2.query_mailbox(&delegator_identifier2.id(), &[witness_id.clone()])?;
+    // Deliver the multisig request to the second participant
+    let [request] = forwards.as_slice() else {
+        panic!("one forward, to the other participant: {forwards:?}")
+    };
+    assert_eq!(&request.to, delegator_identifier2.id());
+    let action_required = delegator_identifier2
+        .receive_forwards(&request.message)
+        .await?;
 
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegator_km2.sign(&qry.encode()?)?);
-        let action_required = delegator_identifier2
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
+    let signed_by_2 = match &action_required[0] {
+        ActionRequired::DelegationRequest(_, _) => {
+            unreachable!()
+        }
+        ActionRequired::MultisigRequest(multisig_event, exn) => {
+            let signature_ixn =
+                SelfSigningPrefix::Ed25519Sha512(delegator_km2.sign(&multisig_event.encode()?)?);
+            let signature_exn =
+                SelfSigningPrefix::Ed25519Sha512(delegator_km2.sign(&exn.encode()?)?);
+            let exn_index_signature = delegator_identifier2.sign_with_index(signature_exn, 0)?;
+            delegator_identifier2
+                .finalize_group_event(
+                    &multisig_event.encode()?,
+                    signature_ixn.clone(),
+                    vec![(exn.encode()?, exn_index_signature)],
+                )
+                .await?
+        }
+    };
 
-        match &action_required[0] {
-            ActionRequired::DelegationRequest(_, _) => {
-                unreachable!()
-            }
-            ActionRequired::MultisigRequest(multisig_event, exn) => {
-                let signature_ixn = SelfSigningPrefix::Ed25519Sha512(
-                    delegator_km2.sign(&multisig_event.encode()?)?,
-                );
-                let signature_exn =
-                    SelfSigningPrefix::Ed25519Sha512(delegator_km2.sign(&exn.encode()?)?);
-                let exn_index_signature =
-                    delegator_identifier2.sign_with_index(signature_exn, 0)?;
-                delegator_identifier2
-                    .finalize_group_event(
-                        &multisig_event.encode()?,
-                        signature_ixn.clone(),
-                        vec![(exn.encode()?, exn_index_signature)],
-                    )
-                    .await?;
-            }
-        };
-    }
-
-    // Query to get events signed by other participants
-    let query = delegator_identifier1.query_mailbox(&delegator_group_id, &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegator_km1.sign(&qry.encode()?)?);
-        delegator_identifier1
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    // Deliver the event signed by the other participant to the first one
+    let [signed] = signed_by_2.as_slice() else {
+        panic!("one forward, to the group: {signed_by_2:?}")
+    };
+    assert_eq!(signed.to, delegator_group_id);
+    let action_required = delegator_identifier1
+        .receive_forwards(&signed.message)
+        .await?;
+    assert!(action_required.is_empty());
 
     // Query to have receipt of group inception
-    let query = delegator_identifier1.query_mailbox(&delegator_group_id, &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegator_km1.sign(&qry.encode()?)?);
-        delegator_identifier1
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    collect_receipts(
+        &mut delegator_identifier1,
+        &delegator_km1,
+        &delegator_group_id,
+        &[witness_id.clone()],
+    )
+    .await?;
 
     let group_state_1 = delegator_identifier1.find_state(&delegator_group_id)?;
     assert_eq!(group_state_1.sn, 0);
 
     // Query to have receipt of group inception
-    let query = delegator_identifier2.query_mailbox(&delegator_group_id, &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegator_km2.sign(&qry.encode()?)?);
-        delegator_identifier2
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    collect_receipts(
+        &mut delegator_identifier2,
+        &delegator_km2,
+        &delegator_group_id,
+        &[witness_id.clone()],
+    )
+    .await?;
 
     let group_state_2 = delegator_identifier2.find_state(&delegator_group_id)?;
     assert_eq!(group_state_2.sn, 0);
@@ -242,9 +238,10 @@ async fn multi_delegator_multi_delegatee(
         .collect();
 
     // Group initiator needs to use `finalize_group_incept` instead of just
-    // `finalize_event`, to send multisig request to other group participants.
-    // Identifier who get this request from mailbox, can use just `finalize_event`
-    let delegatee_group_id = delegatee_identifier1
+    // `finalize_event`: it returns the forwards that carry the multisig
+    // request to other group participants and the delegation request to
+    // the delegator.
+    let (delegatee_group_id, forwards) = delegatee_identifier1
         .finalize_group_incept(delegatee_group_inception.as_bytes(), signature_icp, exns)
         .await?;
 
@@ -252,68 +249,79 @@ async fn multi_delegator_multi_delegatee(
     // Event is not yet accepted.
     assert!(kel.is_none());
 
-    // Querying mailbox to get multisig request
-    let query =
-        delegatee_identifier2.query_mailbox(&delegatee_identifier2.id(), &[witness_id.clone()])?;
+    let [multisig_request, delegation_request] = forwards.as_slice() else {
+        panic!("two forwards, to the other participant and the delegator: {forwards:?}")
+    };
+    assert_eq!(&multisig_request.to, delegatee_identifier2.id());
+    assert_eq!(delegation_request.to, delegator_group_id);
 
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_km2.sign(&qry.encode()?)?);
-        let action_required = delegatee_identifier2
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
+    // Deliver the multisig request to the second participant
+    let action_required = delegatee_identifier2
+        .receive_forwards(&multisig_request.message)
+        .await?;
 
-        match &action_required[0] {
-            ActionRequired::DelegationRequest(_, _) => {
-                unreachable!()
-            }
-            ActionRequired::MultisigRequest(multisig_event, exn) => {
-                let signature_ixn = SelfSigningPrefix::Ed25519Sha512(
-                    delegatee_km2.sign(&multisig_event.encode()?)?,
-                );
-                let signature_exn =
-                    SelfSigningPrefix::Ed25519Sha512(delegatee_km2.sign(&exn.encode()?)?);
-                let exn_index_signature = delegatee_identifier2
-                    .sign_with_index(signature_exn, 0)
-                    .unwrap();
-                delegatee_identifier2
-                    .finalize_group_event(
-                        &multisig_event.encode()?,
-                        signature_ixn.clone(),
-                        vec![(exn.encode()?, exn_index_signature)],
-                    )
-                    .await?;
-            }
-        };
-    }
+    let signed_by_2 = match &action_required[0] {
+        ActionRequired::DelegationRequest(_, _) => {
+            unreachable!()
+        }
+        ActionRequired::MultisigRequest(multisig_event, exn) => {
+            let signature_ixn =
+                SelfSigningPrefix::Ed25519Sha512(delegatee_km2.sign(&multisig_event.encode()?)?);
+            let signature_exn =
+                SelfSigningPrefix::Ed25519Sha512(delegatee_km2.sign(&exn.encode()?)?);
+            let exn_index_signature = delegatee_identifier2
+                .sign_with_index(signature_exn, 0)
+                .unwrap();
+            delegatee_identifier2
+                .finalize_group_event(
+                    &multisig_event.encode()?,
+                    signature_ixn.clone(),
+                    vec![(exn.encode()?, exn_index_signature)],
+                )
+                .await?
+        }
+    };
 
-    // Query to get events signed by other participants
-    let query = delegatee_identifier1.query_mailbox(&delegatee_group_id, &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_km1.sign(&qry.encode()?)?);
-        delegatee_identifier1
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    // Deliver the event signed by the other participant to the first one
+    let [signed] = signed_by_2.as_slice() else {
+        panic!("one forward, to the group: {signed_by_2:?}")
+    };
+    assert_eq!(signed.to, delegatee_group_id);
+    let _action_required = delegatee_identifier1
+        .receive_forwards(&signed.message)
+        .await?;
 
     // Delegation accept process
-    // Each participant of delegator group asks about his mailbox to get delegated event.
-    handle_delegation_request(
+    // The delegation request is a forward to the delegator group, delivered
+    // to each of its participants, which verify it against the requester's
+    // KEL.
+    let requester_kel = delegatee_identifier1.get_own_kel().unwrap();
+    for participant in [&delegator_identifier1, &delegator_identifier2] {
+        for notice in &requester_kel {
+            participant
+                .known_events
+                .process(&Message::Notice(notice.clone()))?;
+        }
+    }
+
+    let from_1 = handle_delegation_request(
         &mut delegator_identifier1,
         &delegator_km1,
         &[witness_id.clone()],
         delegator_group_id.clone(),
         &delegatee_group_id,
+        &delegation_request.message,
     )
     .await
     .unwrap();
 
-    handle_delegation_request(
+    let from_2 = handle_delegation_request(
         &mut delegator_identifier2,
         &delegator_km2,
         &[witness_id.clone()],
         delegator_group_id.clone(),
         &delegatee_group_id,
+        &delegation_request.message,
     )
     .await
     .unwrap();
@@ -322,16 +330,42 @@ async fn multi_delegator_multi_delegatee(
     let delegator_state = controller2.find_state(&delegator_group_id).unwrap();
     assert_eq!(delegator_state.sn, 1);
 
-    // Query for receipts and second group participant ixn
-    let query = delegator_identifier1.query_mailbox(&delegator_group_id, &[witness_id.clone()])?;
+    // Each participant forwards the signed ixn to the group, and the
+    // approval to the delegatee group.
+    let (to_group_1, approvals_1): (Vec<_>, Vec<_>) = from_1
+        .into_iter()
+        .partition(|forward| forward.to == delegator_group_id);
+    let (to_group_2, approvals_2): (Vec<_>, Vec<_>) = from_2
+        .into_iter()
+        .partition(|forward| forward.to == delegator_group_id);
+    assert_eq!(to_group_1.len(), 1);
+    assert_eq!(to_group_2.len(), 1);
+    let approvals = approvals_1
+        .into_iter()
+        .chain(approvals_2)
+        .collect::<Vec<_>>();
+    assert_eq!(approvals.len(), 2);
+    assert!(approvals
+        .iter()
+        .all(|approval| approval.to == delegatee_group_id));
 
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegator_km1.sign(&qry.encode()?)?);
-        let _action_required = delegator_identifier1
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await
-            .unwrap();
-    }
+    // Deliver the second group participant ixn and query for receipts
+    let _action_required = delegator_identifier1
+        .receive_forwards(&to_group_2[0].message)
+        .await
+        .unwrap();
+    collect_receipts(
+        &mut delegator_identifier1,
+        &delegator_km1,
+        &delegator_group_id,
+        &[witness_id.clone()],
+    )
+    .await
+    .unwrap();
+    let _action_required = delegator_identifier2
+        .receive_forwards(&to_group_1[0].message)
+        .await
+        .unwrap();
 
     let delegators_state = controller1.find_state(&delegator_group_id).unwrap();
     assert_eq!(delegators_state.sn, 1);
@@ -355,27 +389,36 @@ async fn multi_delegator_multi_delegatee(
     let state = delegatee_identifier2.find_state(&delegator_group_id)?;
     assert_eq!(state.sn, 0);
 
-    // Ask about delegated identifier mailbox. Should get delegating event.
-    let query = delegatee_identifier1.query_mailbox(&delegatee_group_id, &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_km1.sign(&qry.encode()?)?);
-        let ar = delegatee_identifier1
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-        assert!(ar.is_empty())
+    // The approvals are verified against the delegator group participants'
+    // KELs.
+    for participant in [&delegator_identifier1, &delegator_identifier2] {
+        for notice in participant.get_own_kel().unwrap() {
+            delegatee_identifier1
+                .known_events
+                .process(&Message::Notice(notice.clone()))?;
+            delegatee_identifier2
+                .known_events
+                .process(&Message::Notice(notice))?;
+        }
     }
+    let approvals = approvals
+        .iter()
+        .flat_map(|approval| approval.message.clone())
+        .collect::<Vec<_>>();
+
+    // Deliver the approvals to the delegatee group participants. Should
+    // bring the delegating event.
+    let ar = delegatee_identifier1.receive_forwards(&approvals).await?;
+    assert!(ar.is_empty());
 
     // Query to get receipts of delegated event
-    let query = delegatee_identifier1.query_mailbox(&delegatee_group_id, &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_km1.sign(&qry.encode()?)?);
-        let ar = delegatee_identifier1
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-        assert!(ar.is_empty())
-    }
+    collect_receipts(
+        &mut delegatee_identifier1,
+        &delegatee_km1,
+        &delegatee_group_id,
+        &[witness_id.clone()],
+    )
+    .await?;
 
     let state = delegatee_identifier1
         .find_state(&delegatee_group_id)
@@ -387,16 +430,19 @@ async fn multi_delegator_multi_delegatee(
         .unwrap();
     assert_eq!(state.sn, 1);
 
-    // Ask about delegated identifier mailbox
-    let query = delegatee_identifier2.query_mailbox(&delegatee_group_id, &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_km2.sign(&qry.encode()?)?);
-        let _ar = delegatee_identifier2
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await
-            .unwrap();
-    }
+    // Deliver the approvals to the second participant and query for receipts
+    let _ar = delegatee_identifier2
+        .receive_forwards(&approvals)
+        .await
+        .unwrap();
+    collect_receipts(
+        &mut delegatee_identifier2,
+        &delegatee_km2,
+        &delegatee_group_id,
+        &[witness_id.clone()],
+    )
+    .await
+    .unwrap();
 
     let state = delegatee_identifier2
         .find_state(&delegatee_group_id)

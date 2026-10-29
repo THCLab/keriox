@@ -6,11 +6,12 @@ use keri_controller::{
     mailbox_updating::ActionRequired, Oobi,
 };
 use keri_core::{
+    actor::prelude::Message,
     oobi::{EndRole, Role},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
 };
-use keri_tests::settings::InfrastructureContext;
+use keri_tests::{collect_receipts, settings::InfrastructureContext};
 use tempfile::Builder;
 use test_context::test_context;
 
@@ -45,15 +46,9 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
         .unwrap();
 
     identifier1.notify_witnesses().await?;
-    // Quering mailbox to get receipts
-    let query = identifier1.query_mailbox(identifier1.id(), &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
-        identifier1
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    // Asking the witness for the KEL to get receipts
+    let id1 = identifier1.id().clone();
+    collect_receipts(&mut identifier1, &km1, &id1, &[witness_id.clone()]).await?;
     assert!(identifier1.get_own_kel().is_some());
 
     // Setup second identifier.
@@ -81,15 +76,9 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
         .unwrap();
     identifier2.notify_witnesses().await?;
 
-    // Quering mailbox to get receipts
-    let query = identifier2.query_mailbox(identifier2.id(), &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
-        identifier2
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    // Asking the witness for the KEL to get receipts
+    let id2 = identifier2.id().clone();
+    collect_receipts(&mut identifier2, &km2, &id2, &[witness_id.clone()]).await?;
     assert!(identifier2.get_own_kel().is_some());
 
     // Identifier1 adds watcher
@@ -155,9 +144,9 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
     let exn_index_signature = identifier1.sign_with_index(signature_exn, 0)?;
 
     // Group initiator needs to use `finalize_group_incept` instead of just
-    // `finalize_event`, to send multisig request to other group participants.
-    // Identifier who get this request from mailbox, can use just `finalize_event`
-    let group_id = identifier1
+    // `finalize_event`: it returns the forwards that carry the multisig
+    // request to the other group participants.
+    let (group_id, forwards) = identifier1
         .finalize_group_incept(
             group_inception.as_bytes(),
             signature_icp,
@@ -169,54 +158,47 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
     // Event is not yet accepted.
     assert!(kel.is_none());
 
-    // Quering mailbox to get multisig request
-    let query = identifier2.query_mailbox(&identifier2.id(), &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
-        let action_required = identifier2
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-
-        match &action_required[0] {
-            ActionRequired::DelegationRequest(_, _) => {
-                unreachable!()
-            }
-            ActionRequired::MultisigRequest(multisig_event, exn) => {
-                let signature_ixn =
-                    SelfSigningPrefix::Ed25519Sha512(km2.sign(&multisig_event.encode()?)?);
-                let signature_exn = SelfSigningPrefix::Ed25519Sha512(km2.sign(&exn.encode()?)?);
-                let exn_index_signature = identifier2.sign_with_index(signature_exn, 0)?;
-                identifier2
-                    .finalize_group_event(
-                        &multisig_event.encode()?,
-                        signature_ixn.clone(),
-                        vec![(exn.encode()?, exn_index_signature)],
-                    )
-                    .await?;
-            }
-        };
+    // identifier2 verifies the forward against identifier1's KEL.
+    for notice in controller1.get_kel_with_receipts(&id1).unwrap() {
+        controller2.known_events.save(&Message::Notice(notice))?;
     }
 
-    // Query to get events signed by other participants
-    let query = identifier1.query_mailbox(&group_id, &[witness_id.clone()])?;
+    // identifier2 receives the multisig request
+    let [request] = forwards.as_slice() else {
+        panic!("one forward, to the other participant: {forwards:?}")
+    };
+    assert_eq!(&request.to, identifier2.id());
+    let action_required = identifier2.receive_forwards(&request.message).await?;
+    let signed_by_2 = match &action_required[0] {
+        ActionRequired::DelegationRequest(_, _) => {
+            unreachable!()
+        }
+        ActionRequired::MultisigRequest(multisig_event, exn) => {
+            let signature_ixn =
+                SelfSigningPrefix::Ed25519Sha512(km2.sign(&multisig_event.encode()?)?);
+            let signature_exn = SelfSigningPrefix::Ed25519Sha512(km2.sign(&exn.encode()?)?);
+            let exn_index_signature = identifier2.sign_with_index(signature_exn, 0)?;
+            identifier2
+                .finalize_group_event(
+                    &multisig_event.encode()?,
+                    signature_ixn.clone(),
+                    vec![(exn.encode()?, exn_index_signature)],
+                )
+                .await?
+        }
+    };
 
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
-        identifier1
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    // identifier1 receives the event signed by the other participant, for
+    // the group, and publishes it fully signed.
+    let [signed] = signed_by_2.as_slice() else {
+        panic!("one forward, to the group: {signed_by_2:?}")
+    };
+    assert_eq!(signed.to, group_id);
+    let action_required = identifier1.receive_forwards(&signed.message).await?;
+    assert!(action_required.is_empty());
 
     // Query to have receipt of group inception
-    let query = identifier1.query_mailbox(&group_id, &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
-        identifier1
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    collect_receipts(&mut identifier1, &km1, &group_id, &[witness_id.clone()]).await?;
 
     let group_state_1 = identifier1.find_state(&group_id)?;
     assert_eq!(group_state_1.sn, 0);
@@ -228,14 +210,7 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
     ));
 
     // Query to have receipt of group inception
-    let query = identifier2.query_mailbox(&group_id, &[witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
-        identifier2
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    collect_receipts(&mut identifier2, &km2, &group_id, &[witness_id.clone()]).await?;
 
     let group_state_2 = identifier2.find_state(&group_id)?;
     assert_eq!(group_state_2.sn, 0);

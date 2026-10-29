@@ -5,7 +5,7 @@ use keri_controller::{
     mailbox_updating::ActionRequired, BasicPrefix, CryptoBox, KeyManager, SelfSigningPrefix,
 };
 use keri_core::{actor::prelude::Message, prefix::IndexedSignature};
-use keri_tests::settings::InfrastructureContext;
+use keri_tests::{collect_receipts, settings::InfrastructureContext};
 use tempfile::Builder;
 use test_context::test_context;
 
@@ -45,16 +45,15 @@ async fn single_delegator_single_delegatee(
         delegator_controller.finalize_incept(icp_event.as_bytes(), &signature)?;
     delegator_identifier.notify_witnesses().await?;
 
-    // Quering mailbox to get receipts
-    let query = delegator_identifier
-        .query_mailbox(delegator_identifier.id(), &[first_witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keypair.sign(&qry.encode()?)?);
-        delegator_identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    // Asking the witness for the KEL to get receipts
+    let delegator_id = delegator_identifier.id().clone();
+    collect_receipts(
+        &mut delegator_identifier,
+        &delegator_keypair,
+        &delegator_id,
+        &[first_witness_id.clone()],
+    )
+    .await?;
     println!("Delegator: {}", &delegator_identifier.id());
 
     // Setup delegatee
@@ -78,18 +77,15 @@ async fn single_delegator_single_delegatee(
         delegatee_controller.finalize_incept(icp_event.as_bytes(), &signature)?;
     temporary_delegatee_identifier.notify_witnesses().await?;
 
-    // Quering mailbox to get receipts
-    let query = temporary_delegatee_identifier.query_mailbox(
-        temporary_delegatee_identifier.id(),
+    // Asking the witness for the KEL to get receipts
+    let temporary_delegatee_id = temporary_delegatee_identifier.id().clone();
+    collect_receipts(
+        &mut temporary_delegatee_identifier,
+        &delegatee_keypair,
+        &temporary_delegatee_id,
         &[first_witness_id.clone()],
-    )?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
-        temporary_delegatee_identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-    }
+    )
+    .await?;
 
     // Generate delegated inception and exn, that is provide delegation request to delegator.
     let (delegated_inception, exn_messages) = temporary_delegatee_identifier.incept_group(
@@ -107,7 +103,7 @@ async fn single_delegator_single_delegatee(
         SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(exn_messages[0].as_bytes())?);
     let exn_index_signature = temporary_delegatee_identifier.sign_with_index(signature_exn, 0)?;
 
-    let delegatee_id = temporary_delegatee_identifier
+    let (delegatee_id, forwards) = temporary_delegatee_identifier
         .finalize_group_incept(
             delegated_inception.as_bytes(),
             signature_icp.clone(),
@@ -123,65 +119,65 @@ async fn single_delegator_single_delegatee(
     assert!(kel.is_none());
 
     // Delegation accept process
-    // Delegator asks about his mailbox to get delegated event.
-    let query = delegator_identifier
-        .query_mailbox(delegator_identifier.id(), &[first_witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keypair.sign(&qry.encode()?)?);
-        let ar = delegator_identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-
-        assert_eq!(ar.len(), 1);
-        match &ar[0] {
-            ActionRequired::MultisigRequest(_, _) => unreachable!(),
-            ActionRequired::DelegationRequest(delegating_event, exn) => {
-                let signature_ixn = SelfSigningPrefix::Ed25519Sha512(
-                    delegator_keypair.sign(&delegating_event.encode()?)?,
-                );
-                let signature_exn =
-                    SelfSigningPrefix::Ed25519Sha512(delegator_keypair.sign(&exn.encode()?)?);
-                delegator_identifier
-                    .finalize_group_event(
-                        &delegating_event.encode()?,
-                        signature_ixn.clone(),
-                        vec![],
-                    )
-                    .await?;
-                delegator_identifier.notify_witnesses().await?;
-
-                // Query for receipts
-                let query = delegator_identifier
-                    .query_mailbox(delegator_identifier.id(), &[first_witness_id.clone()])?;
-
-                for qry in query {
-                    let signature =
-                        SelfSigningPrefix::Ed25519Sha512(delegator_keypair.sign(&qry.encode()?)?);
-                    let action_required = delegator_identifier
-                        .finalize_query_mailbox(vec![(qry, signature)])
-                        .await?;
-                    assert!(action_required.is_empty());
-                }
-                let data_signature = IndexedSignature::new_both_same(signature_ixn, 0);
-                let exn_index_signature = delegator_identifier.sign_with_index(signature_exn, 0)?;
-
-                delegator_identifier
-                    .finalize_exchange(
-                            &exn.encode()?,
-                            exn_index_signature,
-                            &delegating_event,
-                            data_signature,
-                        )
-                    .await?;
-
-                // ixn was accepted
-                let delegators_state =
-                    delegator_controller.find_state(delegator_identifier.id())?;
-                assert_eq!(delegators_state.sn, 1);
-            }
-        };
+    // The delegation request is a forward to the delegator, which verifies
+    // it against the requester's KEL.
+    let [request] = forwards.as_slice() else {
+        panic!("one forward, to the delegator: {forwards:?}")
+    };
+    assert_eq!(&request.to, delegator_identifier.id());
+    for notice in delegatee_controller
+        .get_kel_with_receipts(&temporary_delegatee_id)
+        .unwrap()
+    {
+        delegator_controller
+            .known_events
+            .save(&Message::Notice(notice))?;
     }
+
+    // Delegator receives the request and approves it.
+    let ar = delegator_identifier
+        .receive_forwards(&request.message)
+        .await?;
+
+    assert_eq!(ar.len(), 1);
+    let approval = match &ar[0] {
+        ActionRequired::MultisigRequest(_, _) => unreachable!(),
+        ActionRequired::DelegationRequest(delegating_event, exn) => {
+            let signature_ixn = SelfSigningPrefix::Ed25519Sha512(
+                delegator_keypair.sign(&delegating_event.encode()?)?,
+            );
+            let signature_exn =
+                SelfSigningPrefix::Ed25519Sha512(delegator_keypair.sign(&exn.encode()?)?);
+            delegator_identifier
+                .finalize_group_event(&delegating_event.encode()?, signature_ixn.clone(), vec![])
+                .await?;
+            delegator_identifier.notify_witnesses().await?;
+
+            // Query for receipts
+            collect_receipts(
+                &mut delegator_identifier,
+                &delegator_keypair,
+                &delegator_id,
+                &[first_witness_id.clone()],
+            )
+            .await?;
+            let data_signature = IndexedSignature::new_both_same(signature_ixn, 0);
+            let exn_index_signature = delegator_identifier.sign_with_index(signature_exn, 0)?;
+
+            let approval = delegator_identifier.finalize_exchange(
+                &exn.encode()?,
+                exn_index_signature,
+                &delegating_event,
+                data_signature,
+            )?;
+
+            // ixn was accepted
+            let delegators_state = delegator_controller.find_state(delegator_identifier.id())?;
+            assert_eq!(delegators_state.sn, 1);
+            approval
+        }
+    };
+    assert_eq!(approval.to, delegatee_id);
 
     // Process delegator's icp by identifier who'll request delegation.
     // TODO how child should get delegators kel?
@@ -195,17 +191,11 @@ async fn single_delegator_single_delegatee(
         .known_events
         .save(&Message::Notice(delegators_kel[1].clone()))?; // receipt
 
-    // Ask about delegated identifier mailbox
-    let query =
-        temporary_delegatee_identifier.query_mailbox(&delegatee_id, &[first_witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
-        let ar = temporary_delegatee_identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-        assert!(ar.is_empty())
-    }
+    // Delegatee receives the approval: the delegating event.
+    let ar = temporary_delegatee_identifier
+        .receive_forwards(&approval.message)
+        .await?;
+    assert!(ar.is_empty());
 
     let state = temporary_delegatee_identifier.find_state(delegator_identifier.id())?;
     assert_eq!(state.sn, 1);
@@ -215,17 +205,14 @@ async fn single_delegator_single_delegatee(
     // assert_eq!(state, None);
     assert!(state.is_err());
 
-    // Get mailbox for receipts.
-    let query =
-        temporary_delegatee_identifier.query_mailbox(&delegatee_id, &[first_witness_id.clone()])?;
-
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
-        let ar = temporary_delegatee_identifier
-            .finalize_query_mailbox(vec![(qry, signature)])
-            .await?;
-        assert!(ar.is_empty());
-    }
+    // Ask the witness for the delegated KEL to get receipts.
+    collect_receipts(
+        &mut temporary_delegatee_identifier,
+        &delegatee_keypair,
+        &delegatee_id,
+        &[first_witness_id.clone()],
+    )
+    .await?;
 
     // Child kel is accepted
     let state = temporary_delegatee_identifier.find_state(&delegatee_id)?;

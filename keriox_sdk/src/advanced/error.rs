@@ -95,7 +95,7 @@ pub enum Error {
         reason: String,
     },
 
-    /// No pending delegation request was found in the mailbox.
+    /// No pending delegation request was among the messages received.
     #[error("no delegation request found")]
     NoDelegationRequest,
 
@@ -103,7 +103,7 @@ pub enum Error {
     #[error("delegation error: {0}")]
     DelegationError(String),
 
-    /// No pending multisig request was found in the mailbox.
+    /// No pending multisig request was among the messages received.
     #[error("no multisig request found")]
     NoMultisigRequest,
 

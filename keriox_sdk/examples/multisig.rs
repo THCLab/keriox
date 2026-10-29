@@ -1,6 +1,8 @@
 //! A group identity: two members, either may sign (threshold 1).
 //!
-//! Needs a running witness (members coordinate through its mailbox):
+//! Needs a running witness, which witnesses the group. The invitation and
+//! the acceptance are messages this example hands over itself; an
+//! application delivers them through a messagebox:
 //!   WITNESS_URL=http://localhost:3232 cargo run -p keri-sdk --example multisig
 
 use std::time::Duration;
@@ -10,7 +12,7 @@ use keri_sdk::{Keri, PendingRequest};
 #[tokio::main]
 async fn main() -> keri_sdk::Result<()> {
     let Ok(witness_url) = std::env::var("WITNESS_URL") else {
-        println!("groups need a witness mailbox; set WITNESS_URL=http://... and re-run");
+        println!("groups need a witness; set WITNESS_URL=http://... and re-run");
         return Ok(());
     };
 
@@ -29,11 +31,16 @@ async fn main() -> keri_sdk::Result<()> {
     let invite = alice.new_group("team").member(bob.id()).threshold(1).initiate().await?;
     println!("group initiated: {}", invite.group_id());
 
-    // Bob accepts the invitation from his mailbox.
-    for request in bob.pending_requests().await? {
-        if let PendingRequest::Group(group) = request {
-            println!("bob sees invitation to {}", group.group_id());
-            group.accept_as("team").await?;
+    // Bob receives the invitation and accepts; his acceptance goes back.
+    for invitation in invite.invitations() {
+        for request in bob.receive(&invitation.message).await? {
+            if let PendingRequest::Group(group) = request {
+                println!("bob sees invitation to {}", group.group_id());
+                let (_team, acceptance) = group.accept_as("team").await?;
+                for message in acceptance {
+                    alice.receive(&message.message).await?;
+                }
+            }
         }
     }
 
@@ -47,7 +54,7 @@ async fn main() -> keri_sdk::Result<()> {
 
     // The group can also issue credentials from its own registry.
     let schema = "EOlgQaGgXI6Zqikg4I0KWaQeL9sRUGu7PUj78GekKnSf";
-    let cred = team
+    let (cred, _co_signing) = team
         .issue(schema, keri_sdk::acdc::Block::new().with("statement", "team-approved"))
         .await?;
     println!("group credential {} valid: {}", cred.id,

@@ -1,14 +1,16 @@
 //! End-to-end: group identities (multisig).
 //!
 //! Alice and Bob, in separate stores, form a group identity. The invitation
-//! and all co-signing travel through their shared witness's mailbox.
+//! and the co-signatures are messages the test delivers between them, as
+//! an application would through a messagebox; their shared witness
+//! witnesses the group.
 
 mod common;
 
 use std::time::Duration;
 
 use common::TestInfra;
-use keri_sdk::PendingRequest;
+use keri_sdk::{GroupInvite, GroupRequest, Identity, Outgoing, PendingRequest};
 use test_context::test_context;
 
 /// Create the two members in separate stores and introduce them to each
@@ -47,6 +49,32 @@ async fn two_members(
     ((alice_dir, alice_keri, alice), (bob_dir, bob_keri, bob))
 }
 
+/// Delivers `invite`'s invitation for `member` to it; returns the request.
+async fn invitation_for(invite: &GroupInvite, member: &Identity) -> GroupRequest {
+    let invitation = invite
+        .invitations()
+        .iter()
+        .find(|out| &out.to == member.id())
+        .expect("an invitation for the member");
+    member
+        .receive(&invitation.message)
+        .await
+        .unwrap()
+        .into_iter()
+        .find_map(|r| match r {
+            PendingRequest::Group(g) if g.is_invitation() => Some(g),
+            _ => None,
+        })
+        .expect("the member sees the group invitation")
+}
+
+/// Delivers the messages for `to` among `messages` to it.
+async fn deliver(messages: &[Outgoing], to: &Identity) {
+    for message in messages.iter().filter(|out| &out.to == to.id()) {
+        to.receive(&message.message).await.unwrap();
+    }
+}
+
 #[test_context(TestInfra)]
 #[actix_rt::test]
 async fn group_lifecycle_any_member_may_sign(infra: &mut TestInfra) {
@@ -62,19 +90,11 @@ async fn group_lifecycle_any_member_may_sign(infra: &mut TestInfra) {
         .expect("group initiation");
     let group_id = invite.group_id();
 
-    // ── Bob finds the invitation in his mailbox and accepts ───────────────
-    let invitation = bob
-        .pending_requests()
-        .await
-        .unwrap()
-        .into_iter()
-        .find_map(|r| match r {
-            PendingRequest::Group(g) if g.is_invitation() => Some(g),
-            _ => None,
-        })
-        .expect("bob sees the group invitation");
+    // ── Bob receives the invitation and accepts ────────────────────────────
+    let invitation = invitation_for(&invite, &bob).await;
     assert_eq!(invitation.group_id(), group_id);
-    let team_bob = invitation.accept_as("team").await.expect("accept invite");
+    let (team_bob, acceptance) = invitation.accept_as("team").await.expect("accept invite");
+    deliver(&acceptance, &alice).await;
     assert_eq!(team_bob.id(), group_id);
 
     // ── Alice's side becomes ready ────────────────────────────────────────
@@ -101,13 +121,13 @@ async fn group_lifecycle_any_member_may_sign(infra: &mut TestInfra) {
     assert_eq!(verified.signer, group_id);
 
     // Bob's store knows the group KEL too (he is a member) — after syncing
-    // the co-signatures and receipts from the mailbox.
+    // it from the witness.
     team_bob.sync().await.unwrap();
     let verified = bob_keri.verify(signed.as_cesr()).expect("bob verifies");
     assert_eq!(verified.signer, group_id);
 
     // ── The group issues a credential ─────────────────────────────────────
-    let cred = team_alice
+    let (cred, _co_signing) = team_alice
         .issue(
             "EOlgQaGgXI6Zqikg4I0KWaQeL9sRUGu7PUj78GekKnSf",
             keri_sdk::acdc::Block::new().with("statement", "team-approved"),
@@ -132,7 +152,7 @@ async fn group_rotation_by_initiator(infra: &mut TestInfra) {
 
     // Threshold 1: the initiator's signature authorizes group events. The
     // fully co-signed k-of-n rotation (every member approving through the
-    // mailbox) is wired via pending_requests()/accept(), but its final
+    // delivered messages) is wired via receive()/accept(), but its final
     // signature-merge step is still being stabilized in keri-controller, so
     // this test exercises the initiator-driven rotation end to end.
     let invite = alice
@@ -144,17 +164,9 @@ async fn group_rotation_by_initiator(infra: &mut TestInfra) {
         .unwrap();
     let group_id = invite.group_id();
 
-    let invitation = bob
-        .pending_requests()
-        .await
-        .unwrap()
-        .into_iter()
-        .find_map(|r| match r {
-            PendingRequest::Group(g) if g.is_invitation() => Some(g),
-            _ => None,
-        })
-        .expect("bob sees the invitation");
-    let board_bob = invitation.accept_as("board").await.unwrap();
+    let invitation = invitation_for(&invite, &bob).await;
+    let (board_bob, acceptance) = invitation.accept_as("board").await.unwrap();
+    deliver(&acceptance, &alice).await;
 
     let board_alice = invite.wait_ready(Duration::from_secs(30)).await.unwrap();
     board_bob.sync().await.unwrap();
@@ -204,17 +216,9 @@ async fn group_rotation_retry_does_not_roll_members_twice(infra: &mut TestInfra)
         .unwrap();
     let group_id = invite.group_id();
 
-    let invitation = bob
-        .pending_requests()
-        .await
-        .unwrap()
-        .into_iter()
-        .find_map(|r| match r {
-            PendingRequest::Group(g) if g.is_invitation() => Some(g),
-            _ => None,
-        })
-        .expect("bob sees the invitation");
-    let board_bob = invitation.accept_as("board").await.unwrap();
+    let invitation = invitation_for(&invite, &bob).await;
+    let (board_bob, acceptance) = invitation.accept_as("board").await.unwrap();
+    deliver(&acceptance, &alice).await;
 
     let board_alice = invite.wait_ready(Duration::from_secs(30)).await.unwrap();
     board_bob.sync().await.unwrap();

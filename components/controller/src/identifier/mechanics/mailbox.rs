@@ -1,24 +1,23 @@
 use keri_core::{
     actor::event_generator,
     database::{EscrowCreator, EventDatabase},
-    error::Error,
     event::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal},
     },
     event_message::{
-        signed_event_message::{Message, Notice, SignedEventMessage, SignedNontransferableReceipt},
+        signed_event_message::{Message, Notice, SignedEventMessage},
         EventTypeTag,
     },
-    mailbox::{exchange::ForwardTopic, MailboxResponse},
+    mailbox::exchange::ForwardTopic,
     oobi_manager::storage::OobiStorageBackend,
     prefix::IdentifierPrefix,
 };
 use teliox::registry::RegistryStore;
 
-use crate::{error::ControllerError, identifier::Identifier, mailbox_updating::ActionRequired};
+use crate::{identifier::Identifier, mailbox_updating::ActionRequired};
 
-use super::{MechanicsError, ResponseProcessingError};
+use super::{forwards::ResponseProcessingError, MechanicsError};
 
 impl<D, T, S> Identifier<D, T, S>
 where
@@ -26,89 +25,9 @@ where
     T: RegistryStore + Send + Sync + 'static,
     S: OobiStorageBackend,
 {
-    pub(crate) async fn mailbox_response(
-        &self,
-        recipient: &IdentifierPrefix,
-        from_who: &IdentifierPrefix,
-        about_who: &IdentifierPrefix,
-        res: &MailboxResponse,
-    ) -> Result<Vec<ActionRequired>, ControllerError> {
-        let req = if from_who == about_who {
-            // process own mailbox
-            let req = self.process_own_mailbox(res)?;
-            self.query_cache
-                .update_last_asked_index(about_who, recipient, res)?;
-            req
-        } else {
-            // process group mailbox
-            let group_req = self.process_group_mailbox(res, about_who).await?;
-            self.query_cache
-                .update_last_asked_group_index(about_who, recipient, res)?;
-            group_req
-        };
-        Ok(req)
-    }
-
-    fn process_receipt(&self, receipt: &SignedNontransferableReceipt) -> Result<(), Error> {
-        self.known_events
-            .process(&Message::Notice(Notice::NontransferableRct(
-                receipt.clone(),
-            )))?;
-        Ok(())
-    }
-
-    fn process_own_mailbox(
-        &self,
-        mb: &MailboxResponse,
-    ) -> Result<Vec<ActionRequired>, MechanicsError> {
-        for rct in &mb.receipt {
-            self.process_receipt(rct)
-                .map_err(ResponseProcessingError::Receipts)?;
-        }
-
-        Iterator::chain(
-            mb.multisig
-                .iter()
-                .map(|event| self.process_own_multisig(event)),
-            mb.delegate
-                .iter()
-                .map(|del_event| self.process_own_delegate(del_event))
-                .filter_map(Result::transpose),
-        )
-        .collect()
-    }
-
-    async fn process_group_mailbox(
-        &self,
-        mb: &MailboxResponse,
-        group_id: &IdentifierPrefix,
-    ) -> Result<Vec<ActionRequired>, MechanicsError> {
-        let mut actions = vec![];
-
-        for multisig in &mb.multisig {
-            let ar = self.process_group_multisig(&multisig).await?;
-            if let Some(ar) = ar {
-                actions.push(ar);
-            }
-        }
-
-        for delegate in &mb.delegate {
-            let ar = self.process_group_delegate(&delegate, group_id).await?;
-            if let Some(ar) = ar {
-                actions.push(ar);
-            }
-        }
-
-        for rct in &mb.receipt {
-            self.process_receipt(rct)
-                .map_err(ResponseProcessingError::Receipts)?;
-        }
-        Ok(actions)
-    }
-
     /// Returns exn message that contains signed multisig event and will be
     /// forward to group identifier's mailbox.
-    fn process_own_multisig(
+    pub(super) fn process_own_multisig(
         &self,
         event: &SignedEventMessage,
     ) -> Result<ActionRequired, MechanicsError> {
@@ -128,7 +47,7 @@ where
     }
 
     /// If leader and event is fully signed publish event to witness.
-    async fn process_group_multisig(
+    pub(super) async fn process_group_multisig(
         &self,
         event: &SignedEventMessage,
     ) -> Result<Option<ActionRequired>, MechanicsError> {
@@ -201,7 +120,7 @@ where
 
     /// Process event from delegate mailbox. If signing is required to finish
     /// the process it returns proper notification.
-    fn process_own_delegate(
+    pub(super) fn process_own_delegate(
         &self,
         event_to_confirm: &SignedEventMessage,
     ) -> Result<Option<ActionRequired>, MechanicsError> {
@@ -233,7 +152,7 @@ where
     /// event and send it to group multisig mailbox for other group
     /// participants. If signing is required to finish the process it returns
     /// proper notification.
-    async fn process_group_delegate(
+    pub(super) async fn process_group_delegate(
         &self,
         event_to_confirm: &SignedEventMessage,
         group_id: &IdentifierPrefix,
@@ -306,7 +225,6 @@ where
 mod test {
     use keri_core::{
         event_message::signed_event_message::{Message, Notice},
-        mailbox::MailboxResponse,
         prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
         signer::{CryptoBox, KeyManager},
     };
@@ -334,11 +252,11 @@ mod test {
         (root, controller, id)
     }
 
-    /// A group's delegate mailbox should hold delegating and delegated
-    /// events; anything else a witness puts there is processed like any key
-    /// event instead of panicking.
+    /// A delegation forward for a group carries a delegating or a delegated
+    /// event; anything else is processed like any key event instead of
+    /// panicking.
     #[async_std::test]
-    async fn a_group_delegate_mailbox_entry_of_another_type_is_processed() {
+    async fn a_group_delegation_forward_of_another_type_is_processed() {
         let (_root, _controller, member) = identifier("grp-del-member");
         let (_other_root, _other_controller, other) = identifier("grp-del-other");
         let Some(Notice::Event(icp)) = other.get_own_kel().unwrap().into_iter().next() else {
@@ -346,23 +264,14 @@ mod test {
         };
         let group =
             IdentifierPrefix::Basic(BasicPrefix::Ed25519(CryptoBox::new().unwrap().public_key()));
-        let mailbox = MailboxResponse {
-            receipt: vec![],
-            multisig: vec![],
-            delegate: vec![icp],
-        };
+        let action = member.process_group_delegate(&icp, &group).await.unwrap();
 
-        let actions = member
-            .process_group_mailbox(&mailbox, &group)
-            .await
-            .unwrap();
-
-        assert!(actions.is_empty());
+        assert!(action.is_none());
         assert!(member.find_state(other.id()).is_ok());
     }
 
-    /// Exchange messages reach a controller through its mailbox. One that
-    /// turns up among other messages, e.g. in a watcher's answer, is refused.
+    /// Forwards reach a controller through receive_forwards. One that turns
+    /// up among other messages, e.g. in a watcher's answer, is refused.
     #[test]
     fn an_exchange_message_is_refused_by_process() {
         let (_root, controller, _id) = identifier("exn-process");

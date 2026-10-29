@@ -64,7 +64,7 @@ async fn test_store_rotate_multisig_group_evicts_member() {
     // Alice must see Bob's KEL before she can include him in the group.
     ingest_kel(&id_b, &id_a);
 
-    let group_prefix = store
+    let (group_prefix, _invitations) = store
         .create_multisig_group(
             "g",
             "alice",
@@ -137,7 +137,7 @@ async fn test_store_rotate_multisig_group_noop_refresh() {
 
     ingest_kel(&id_b, &id_a);
 
-    let group_prefix = store
+    let (group_prefix, _invitations) = store
         .create_multisig_group(
             "g",
             "alice",

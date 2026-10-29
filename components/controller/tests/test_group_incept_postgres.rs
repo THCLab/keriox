@@ -51,8 +51,9 @@ async fn test_group_incept_postgres() -> Result<(), ControllerError> {
     let signature_exn = SelfSigningPrefix::Ed25519Sha512(km1.sign(exn_messages[0].as_bytes())?);
     let exn_index_signature = identifier1.sign_with_index(signature_exn, 0)?;
 
-    // Group initiator uses `finalize_group_incept` to send multisig request to other participants.
-    let group_id = identifier1
+    // Group initiator uses `finalize_group_incept`: it returns the forwards
+    // that carry the inception to the other participants.
+    let (group_id, forwards) = identifier1
         .finalize_group_incept(
             group_inception.as_bytes(),
             signature_icp,
@@ -64,7 +65,12 @@ async fn test_group_incept_postgres() -> Result<(), ControllerError> {
     // Event is not yet accepted — needs both signatures.
     assert!(kel.is_none());
 
-    // identifier2 receives the group icp from identifier1's mailbox (shared controller).
+    // identifier2 receives the forward, which asks it to co-sign.
+    let [forward] = forwards.as_slice() else {
+        panic!("one forward, to the other participant: {forwards:?}")
+    };
+    let actions = identifier2.receive_forwards(&forward.message).await?;
+    assert_eq!(actions.len(), 1, "{actions:?}");
     let signature_icp = SelfSigningPrefix::Ed25519Sha512(km2.sign(group_inception.as_bytes())?);
     identifier2
         .finalize_group_event(group_inception.as_bytes(), signature_icp, vec![])

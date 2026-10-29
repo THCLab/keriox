@@ -17,6 +17,7 @@ use keri_controller::{
     identifier::query::QueryResponse, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix,
     KeyManager, LocationScheme, Oobi, SelfSigningPrefix,
 };
+use keri_tests::collect_receipts;
 use tempfile::Builder;
 use url::Url;
 use watcher::{WatcherConfig, WatcherListener};
@@ -110,10 +111,9 @@ async fn run_scenario(
     signer.notify_witnesses().await.unwrap();
 
     // Pull receipts from every witness so the inception is fully accepted.
-    for qry in signer.query_mailbox(signer.id(), &witness_ids)? {
-        let qsig = SelfSigningPrefix::Ed25519Sha512(signer_km.sign(&qry.encode()?)?);
-        signer.finalize_query_mailbox(vec![(qry, qsig)]).await?;
-    }
+    // All at once, so each witness gets the others' receipts too.
+    let signer_id = signer.id().clone();
+    collect_receipts(&mut signer, &signer_km, &signer_id, &witness_ids).await?;
 
     let event_seal = signer
         .get_last_establishment_event_seal()
@@ -144,9 +144,9 @@ async fn run_scenario(
     let v_sig = SelfSigningPrefix::Ed25519Sha512(verifier_km.sign(v_icp.as_bytes())?);
     let mut verifier = verifier_controller.finalize_incept(v_icp.as_bytes(), &v_sig)?;
     verifier.notify_witnesses().await.unwrap();
-    for qry in verifier.query_mailbox(verifier.id(), &[witnesses[0].id.clone()])? {
+    for qry in verifier.query_receipts(verifier.id(), &[witnesses[0].id.clone()])? {
         let qsig = SelfSigningPrefix::Ed25519Sha512(verifier_km.sign(&qry.encode()?)?);
-        verifier.finalize_query_mailbox(vec![(qry, qsig)]).await?;
+        verifier.finalize_query_receipts(vec![(qry, qsig)]).await?;
     }
 
     // Hook the verifier to the watcher.

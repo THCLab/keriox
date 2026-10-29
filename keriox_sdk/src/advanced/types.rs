@@ -13,7 +13,7 @@ pub use keri_core::signer::SignerAlgorithm;
 // ── Storage configuration ────────────────────────────────────────────────────
 
 /// Where a store keeps its databases: the event databases (KEL, TEL,
-/// OOBIs, escrows, mailbox query caches) and the alias metadata database.
+/// OOBIs, escrows, receipt caches) and the alias metadata database.
 ///
 /// Signing seeds for software keys are stored separately through a
 /// [`SecretsStore`](crate::advanced::secrets::SecretsStore) (file-backed by
@@ -31,7 +31,7 @@ pub enum StorageConfig {
     InMemory,
     /// Event databases in a Postgres server (feature `storage-postgres`).
     ///
-    /// The store directory still holds the metadata database, the mailbox
+    /// The store directory still holds the metadata database, the receipt
     /// query cache and (by default) software-key seed files — per-process
     /// local state. `url` is a standard connection string, e.g.
     /// `postgres://user:pass@host:5432/dbname`.
@@ -451,9 +451,9 @@ impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for MultisigRequ
 
 // ── Unified pending request ──────────────────────────────────────────────────
 
-/// A pending request discovered in the mailbox.
+/// A pending request delivered to this identifier.
 ///
-/// Returned by [`crate::advanced::operations::poll_pending_requests`]. Use the
+/// Returned by [`crate::advanced::operations::receive_forwards`]. Use the
 /// convenience methods or pattern-match to determine the request type
 /// and pass it to [`crate::advanced::operations::approve_delegation`] or
 /// [`crate::advanced::operations::accept_multisig`] accordingly.
