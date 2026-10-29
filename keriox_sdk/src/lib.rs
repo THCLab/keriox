@@ -88,7 +88,7 @@ mod retry;
 #[doc = include_str!("../docs/concepts.md")]
 pub mod concepts {}
 
-pub use credential::{Credential, CredentialStatus};
+pub use credential::{Credential, CredentialStatus, ReceivedCredential};
 pub use error::{Error, Result};
 pub use group::{Group, GroupBuilder, GroupInvite, GroupRequest};
 pub use identity::{Identity, IdentityBackup, IdentityBuilder, KeyAlgorithm};

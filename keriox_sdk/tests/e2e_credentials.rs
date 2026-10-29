@@ -140,3 +140,57 @@ async fn an_altered_presentation_is_refused(infra: &mut TestInfra) {
     truncated.pop();
     assert!(keri.verify_credential(&truncated).is_err());
 }
+
+/// A credential travels by IPEX: the issuer grants it to its holder, who
+/// admits it, and the holder grants it on to a verifier. Each side judges
+/// what it is granted from the grant alone and the key histories it knows.
+#[test_context(TestInfra)]
+#[actix_rt::test]
+async fn a_credential_travels_by_ipex(infra: &mut TestInfra) {
+    let new_identity = |keri: &keri_sdk::Keri, alias: &'static str| {
+        let builder = keri.new_identity(alias).witness(&infra.witness.url);
+        async move { builder.build().await.unwrap() }
+    };
+    let (_issuer_dir, issuer_keri) = common::temp_keri();
+    let (_holder_dir, holder_keri) = common::temp_keri();
+    let (_verifier_dir, verifier_keri) = common::temp_keri();
+    let issuer = new_identity(&issuer_keri, "university").await;
+    let holder = new_identity(&holder_keri, "student").await;
+    let verifier = new_identity(&verifier_keri, "employer").await;
+    let issuer_oobi = issuer.oobi_url().unwrap();
+    let holder_oobi = holder.oobi_url().unwrap();
+
+    let diploma = issuer
+        .issue(SCHEMA, Block::new().with("degree", "MSc"))
+        .await
+        .unwrap();
+
+    // Issuer to holder.
+    let grant = issuer
+        .grant(&diploma.presentation, holder.id(), "Your diploma")
+        .unwrap();
+    // The holder cannot judge it before knowing the issuer.
+    assert!(holder.receive_grant(&grant).is_err());
+    holder_keri.import_contact(&issuer_oobi).await.unwrap();
+    let received = holder.receive_grant(&grant).unwrap();
+    assert_eq!(&received.from, issuer.id());
+    assert_eq!(received.status, CredentialStatus::Issued);
+    assert_eq!(received.message.as_deref(), Some("Your diploma"));
+    assert_eq!(received.acdc.said(), diploma.acdc.said());
+    // A grant for someone else is refused.
+    assert!(verifier.receive_grant(&grant).is_err());
+
+    let admit = holder.admit(&grant, "Thanks").unwrap();
+    issuer_keri.import_contact(&holder_oobi).await.unwrap();
+    assert_eq!(&issuer.receive_admit(&admit).unwrap(), holder.id());
+
+    // Holder to verifier.
+    let presented = holder
+        .grant(&received.presentation, verifier.id(), "My diploma")
+        .unwrap();
+    verifier_keri.import_contact(&issuer_oobi).await.unwrap();
+    verifier_keri.import_contact(&holder_oobi).await.unwrap();
+    let checked = verifier.receive_grant(&presented).unwrap();
+    assert_eq!(&checked.from, holder.id());
+    assert_eq!(checked.status, CredentialStatus::Issued);
+}

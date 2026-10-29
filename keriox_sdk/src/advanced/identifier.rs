@@ -13,7 +13,10 @@ use keri_core::{
     state::{IdentifierState, IdentifierStatus},
 };
 use keri_core::event_message::msg::KeriEvent;
-use teliox::registry::{AcdcBinding, Blinding, Disclosure, Pending, Policy, Verdict};
+use teliox::{
+    ipex::{Admit, Grant},
+    registry::{AcdcBinding, Blinding, Disclosure, Pending, Policy, Presentation, Verdict},
+};
 
 use crate::advanced::error::Result;
 use crate::advanced::types::VerificationIssue;
@@ -661,6 +664,66 @@ impl Identifier {
     ) -> Result<Verdict> {
         dispatch!(self, i => {
         Ok(i.registry_verdict(registry, acdc, policy)?)
+    })
+    }
+
+    // ── IPEX ─────────────────────────────────────────────────────────────────
+
+    /// An unsigned IPEX grant of the presented credential to `recipient`.
+    pub fn grant(
+        &self,
+        recipient: &IdentifierPrefix,
+        message: &str,
+        presentation: &Presentation,
+    ) -> Grant {
+        dispatch!(self, i => {
+        i.grant(recipient, message, presentation)
+    })
+    }
+
+    /// The stream to deliver for `grant` signed with `sig`: the
+    /// credential's registry events, then the signed grant.
+    pub fn finalize_grant(
+        &self,
+        grant: Grant,
+        presentation: &Presentation,
+        sig: SelfSigningPrefix,
+    ) -> Result<Vec<u8>> {
+        dispatch!(self, i => {
+        Ok(i.finalize_grant(grant, presentation, sig)?)
+    })
+    }
+
+    /// Read a grant stream sent to this identifier, verify its sender, and
+    /// judge the credential it presents.
+    pub fn receive_grant(
+        &self,
+        stream: &[u8],
+        policy: &Policy,
+    ) -> Result<(Grant, Presentation, Verdict)> {
+        dispatch!(self, i => {
+        Ok(i.receive_grant(stream, policy)?)
+    })
+    }
+
+    /// An unsigned admit of a grant sent to this identifier.
+    pub fn admit(&self, grant: &Grant, message: &str) -> Result<Admit> {
+        dispatch!(self, i => {
+        Ok(i.admit(grant, message)?)
+    })
+    }
+
+    /// The admit signed with `sig`.
+    pub fn finalize_admit(&self, admit: Admit, sig: SelfSigningPrefix) -> Result<Vec<u8>> {
+        dispatch!(self, i => {
+        Ok(i.finalize_admit(admit, sig)?)
+    })
+    }
+
+    /// Read an admit sent to this identifier and verify its sender.
+    pub fn receive_admit(&self, bytes: &[u8]) -> Result<Admit> {
+        dispatch!(self, i => {
+        Ok(i.receive_admit(bytes)?)
     })
     }
 

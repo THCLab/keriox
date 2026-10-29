@@ -299,6 +299,120 @@ impl Identity {
             .map_err(crate::advanced::Error::from)?)
     }
 
+    /// Grant a presented credential (a [`crate::Credential::presentation`]
+    /// or a [`crate::ReceivedCredential::presentation`]) to `recipient`:
+    /// the issuer grants it to its holder, the holder to a verifier. Returns
+    /// the IPEX grant stream to deliver, through any channel.
+    pub fn grant(
+        &self,
+        presentation: &[u8],
+        recipient: &IdentityId,
+        message: &str,
+    ) -> Result<Vec<u8>> {
+        let presentation = teliox::registry::Presentation::parse(presentation)
+            .map_err(crate::advanced::Error::from)?;
+        let identifier = self.keri.store.load(&self.alias)?;
+        let recipient = recipient.as_prefix();
+        Ok(match &self.keys {
+            Keys::Software => {
+                let signer = self.keri.store.load_signer(&self.alias)?;
+                crate::advanced::ipex::grant(&identifier, &signer, recipient, &presentation, message)?
+            }
+            #[cfg(feature = "keyprovider")]
+            Keys::Provider { current, .. } => {
+                crate::advanced::ipex::grant(&identifier, current, recipient, &presentation, message)?
+            }
+        })
+    }
+
+    /// Read a grant sent to this identity: verify that its sender signed it
+    /// and judge the credential it presents, under the default policy. The
+    /// sender's and the issuer's key histories must be known to this store
+    /// ([`crate::Keri::import_contact`]).
+    pub fn receive_grant(&self, grant: &[u8]) -> Result<crate::credential::ReceivedCredential> {
+        let (presentation, parsed) =
+            teliox::ipex::parse_grant_stream(grant).map_err(|e| Error::InvalidInput {
+                expected: "an IPEX grant",
+                cause: e.to_string(),
+            })?;
+        let sender = parsed.exchange.data.sender.clone();
+        let issuer: keri_controller::IdentifierPrefix = presentation
+            .acdc
+            .issuer()
+            .parse()
+            .map_err(|_| Error::InvalidInput {
+                expected: "an ACDC issuer",
+                cause: presentation.acdc.issuer().to_string(),
+            })?;
+        let identifier = self.known(&[&sender, &issuer])?;
+        let (grant, presentation, verdict) =
+            identifier.receive_grant(grant, &teliox::registry::Policy::default())?;
+        Ok(crate::credential::ReceivedCredential {
+            from: IdentityId::from(sender),
+            acdc: presentation.acdc.clone(),
+            status: verdict.into(),
+            message: grant.message().map(str::to_string),
+            presentation: presentation
+                .to_cesr()
+                .map_err(crate::advanced::Error::from)?,
+        })
+    }
+
+    /// Admit a grant sent to this identity; returns the admit to deliver to
+    /// its sender.
+    pub fn admit(&self, grant: &[u8], message: &str) -> Result<Vec<u8>> {
+        let (_, grant) = teliox::ipex::parse_grant_stream(grant).map_err(|e| {
+            Error::InvalidInput {
+                expected: "an IPEX grant",
+                cause: e.to_string(),
+            }
+        })?;
+        let identifier = self.keri.store.load(&self.alias)?;
+        Ok(match &self.keys {
+            Keys::Software => {
+                let signer = self.keri.store.load_signer(&self.alias)?;
+                crate::advanced::ipex::admit(&identifier, &signer, &grant, message)?
+            }
+            #[cfg(feature = "keyprovider")]
+            Keys::Provider { current, .. } => {
+                crate::advanced::ipex::admit(&identifier, current, &grant, message)?
+            }
+        })
+    }
+
+    /// Read an admit sent to this identity and verify its sender. Returns
+    /// who admitted it.
+    pub fn receive_admit(&self, admit: &[u8]) -> Result<IdentityId> {
+        let parsed = teliox::ipex::Admit::parse(admit).map_err(|e| Error::InvalidInput {
+            expected: "an IPEX admit",
+            cause: e.to_string(),
+        })?;
+        let sender = parsed.exchange.data.sender.clone();
+        let identifier = self.known(&[&sender])?;
+        identifier.receive_admit(admit)?;
+        Ok(IdentityId::from(sender))
+    }
+
+    /// This identity's handle, once the key histories of `ids` are in its
+    /// database, copied from the store's other identities and contacts.
+    fn known(
+        &self,
+        ids: &[&keri_controller::IdentifierPrefix],
+    ) -> Result<crate::advanced::Identifier> {
+        for id in ids {
+            let _ = self.keri.copy_kel_into(&self.alias, id);
+        }
+        let identifier = self.keri.store.load(&self.alias)?;
+        for id in ids {
+            if identifier.find_state(id).is_err() {
+                return Err(Error::UnknownSigner {
+                    id: IdentityId::from((*id).clone()),
+                });
+            }
+        }
+        Ok(identifier)
+    }
+
     /// The credentials this identity has issued (most recent last).
     pub fn credentials(&self) -> Result<Vec<CredentialId>> {
         let Some(content) = self.keri.store.read_meta(&self.alias, "credentials")? else {

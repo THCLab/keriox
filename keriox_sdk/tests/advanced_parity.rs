@@ -13,6 +13,8 @@ use keri_sdk::advanced::{
     },
     // Credentials and their registries.
     registry::{issue, issue_group, presentation, revoke, update, verify},
+    // IPEX grants and admits.
+    ipex::{admit, grant},
     // Signing / SAID helpers.
     signing::{compute_said, parse_signed_envelope, saidify_json},
     // Key generation.

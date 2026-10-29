@@ -62,3 +62,20 @@ pub struct Credential {
     /// it to the holder, who shows it to verifiers.
     pub presentation: Vec<u8>,
 }
+
+/// A credential granted to one of this store's identities, as
+/// [`crate::Identity::receive_grant`] read it.
+#[derive(Debug, Clone)]
+pub struct ReceivedCredential {
+    /// Who granted it: its issuer, or a holder presenting it.
+    pub from: IdentityId,
+    /// The ACDC.
+    pub acdc: acdc::Acdc,
+    /// Its state, as presented.
+    pub status: CredentialStatus,
+    /// The message of the grant.
+    pub message: Option<String>,
+    /// The credential with its registry: keep it to present the credential
+    /// in turn.
+    pub presentation: Vec<u8>,
+}

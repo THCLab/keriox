@@ -3,11 +3,10 @@
 use keri_controller::{
     controller::Controller,
     error::ControllerError,
-    registry::{AcdcBinding, Blinding, Policy, Verdict},
+    registry::{AcdcBinding, Blinding, Policy, Presentation, Verdict},
     BasicPrefix, CryptoBox, KeyManager, SelfSigningPrefix,
 };
 use keri_core::{
-    actor::prelude::{HashFunction, HashFunctionCode},
     database::{EscrowCreator, EventDatabase},
     oobi_manager::storage::OobiStorageBackend,
 };
@@ -41,7 +40,16 @@ where
     let registry = rip.event.said().unwrap();
 
     let blinding = Blinding::private();
-    let acdc = HashFunction::from(HashFunctionCode::Blake3_256).derive(b"credential");
+    let credential = acdc::Acdc::builder(
+        issuer.id().to_string(),
+        "EOlgQaGgXI6Zqikg4I0KWaQeL9sRUGu7PUj78GekKnSf",
+    )
+    .private()
+    .registry(registry.to_string())
+    .attributes(acdc::Block::new().with("degree", "MSc"))
+    .build(acdc::Kind::Json, acdc::HashFunctionCode::Blake3_256)
+    .unwrap();
+    let acdc: said::SelfAddressingIdentifier = credential.said().parse().unwrap();
     let presented = AcdcBinding {
         said: acdc.clone(),
         issuer: issuer.id().clone(),
@@ -60,6 +68,41 @@ where
         Verdict::Valid { state, .. } => assert_eq!(state.state.as_deref(), Some("issued")),
         other => panic!("{other:?}"),
     }
+
+    // The issuer grants the credential to a holder, who judges it and
+    // admits it.
+    let holder_keys = CryptoBox::new()?;
+    let icp = controller
+        .incept(
+            vec![BasicPrefix::Ed25519(holder_keys.public_key())],
+            vec![BasicPrefix::Ed25519(holder_keys.next_public_key())],
+            vec![],
+            0,
+        )
+        .await?;
+    let signature = SelfSigningPrefix::Ed25519Sha512(holder_keys.sign(icp.as_bytes())?);
+    let holder = controller.finalize_incept(icp.as_bytes(), &signature)?;
+    let presentation = Presentation {
+        acdc: credential,
+        disclosure,
+    };
+    let grant = issuer.grant(holder.id(), "Your diploma", &presentation);
+    let grant_sig = sign(&grant.signing_bytes().unwrap());
+    let stream = issuer.finalize_grant(grant, &presentation, grant_sig)?;
+    let (grant, received, verdict) = holder.receive_grant(&stream, &policy)?;
+    assert_eq!(received, presentation);
+    match verdict {
+        Verdict::Valid { state, .. } => assert_eq!(state.state.as_deref(), Some("issued")),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(grant.message(), Some("Your diploma"));
+    assert!(issuer.receive_grant(&stream, &policy).is_err());
+    let admit = holder.admit(&grant, "Thanks")?;
+    let admit_sig =
+        SelfSigningPrefix::Ed25519Sha512(holder_keys.sign(&admit.signing_bytes().unwrap())?);
+    let admit = holder.finalize_admit(admit, admit_sig)?;
+    let admitted = issuer.receive_admit(&admit)?;
+    assert_eq!(admitted.grant().unwrap(), grant.exchange.digest().unwrap());
 
     let (revoked, ixn) = issuer.revoke(&registry, &blinding, &acdc)?;
     let ixn = ixn.encode()?;

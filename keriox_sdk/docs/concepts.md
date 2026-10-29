@@ -74,6 +74,11 @@ registry, and the verifier checks it against the issuer's key history.
 Nothing is looked up on the network: a verifier learns of a revocation when
 it is presented with the revoked state.
 
+Credentials change hands by **IPEX** (Issuance and Presentation Exchange):
+the discloser signs a *grant* of the presentation to one recipient, and the
+recipient may sign an *admit* back. The grant is a byte stream, delivered
+through any channel, a messagebox for instance.
+
 ## Delegation
 
 One identity authorizing another to act under its authority — e.g. your

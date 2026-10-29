@@ -34,6 +34,7 @@ tracing = "0.1"
 [dev-dependencies]
 witness = { path = "../witness" }
 tempfile = { version = "3.27" }
+acdc = { git = "https://gerrit.colossi.network/acdc-rust", branch = "cefa" }
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }
 
 [[test]]

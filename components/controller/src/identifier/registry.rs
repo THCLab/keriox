@@ -12,14 +12,20 @@
 use keri_core::{
     database::{EscrowCreator, EventDatabase},
     event::KeyEvent,
-    event_message::msg::KeriEvent,
+    event_message::{
+        msg::KeriEvent,
+        signature::{Signature, SignerData},
+    },
     oobi_manager::storage::OobiStorageBackend,
-    prefix::SelfSigningPrefix,
+    prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 use said::SelfAddressingIdentifier;
-use teliox::registry::{
-    AcdcBinding, Blinding, Disclosure, Pending, Policy, RegistryIssuer, RegistryStore, Validator,
-    Verdict,
+use teliox::{
+    ipex::{self, Admit, Grant, IpexError},
+    registry::{
+        AcdcBinding, Blinding, Disclosure, Pending, Policy, Presentation, RegistryIssuer,
+        RegistryStore, Validator, Verdict,
+    },
 };
 
 use crate::error::ControllerError;
@@ -143,5 +149,123 @@ where
     ) -> Result<Verdict, ControllerError> {
         let validator = Validator::new(self.known_events.registries.clone(), policy.clone());
         Ok(validator.state(&self.known_events.storage, registry, acdc)?)
+    }
+}
+
+/// IPEX: disclosing credentials to other identifiers and acknowledging
+/// disclosures. A grant is made unsigned, its signing bytes signed by this
+/// identifier's current keys, and finalized into the stream to deliver: the
+/// registry events of the credential, then the signed grant.
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: RegistryStore + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
+    /// This identifier's signature on an exchange, bound to its latest
+    /// establishment event.
+    fn exchange_signature(&self, sig: SelfSigningPrefix) -> Result<Signature, ControllerError> {
+        let seal = self
+            .known_events
+            .storage
+            .get_last_establishment_event_seal(&self.id)
+            .ok_or_else(|| ControllerError::UnknownIdentifierError)?;
+        Ok(Signature::Transferable(
+            SignerData::EventSeal(seal),
+            vec![IndexedSignature::new_both_same(sig, 0)],
+        ))
+    }
+
+    /// An unsigned grant of the presented credential to `recipient`.
+    pub fn grant(
+        &self,
+        recipient: &IdentifierPrefix,
+        message: &str,
+        presentation: &Presentation,
+    ) -> Grant {
+        Grant::new(
+            &self.id,
+            recipient,
+            message,
+            presentation.acdc.clone(),
+            presentation.disclosure.block.clone(),
+        )
+    }
+
+    /// The stream to deliver for `grant` signed with `sig`: the registry
+    /// events of `presentation`, then the signed grant.
+    pub fn finalize_grant(
+        &self,
+        grant: Grant,
+        presentation: &Presentation,
+        sig: SelfSigningPrefix,
+    ) -> Result<Vec<u8>, ControllerError> {
+        let grant = grant.signed(vec![self.exchange_signature(sig)?]);
+        ipex::grant_stream(&presentation.disclosure, &grant).map_err(ipex_error)
+    }
+
+    /// Reads a grant stream sent to this identifier, verifies the sender's
+    /// signatures, and judges the credential it presents. The sender's and
+    /// the credential issuer's KELs must be known here.
+    pub fn receive_grant(
+        &self,
+        stream: &[u8],
+        policy: &Policy,
+    ) -> Result<(Grant, Presentation, Verdict), ControllerError> {
+        let (presentation, grant) = ipex::parse_grant_stream(stream).map_err(ipex_error)?;
+        if grant.exchange.data.recipient != self.id {
+            return Err(ControllerError::OtherError(format!(
+                "the grant is for {}, not {}",
+                grant.exchange.data.recipient, self.id
+            )));
+        }
+        grant
+            .verify(&self.known_events.storage)
+            .map_err(ipex_error)?;
+        let verdict = self.accept_disclosure(
+            &presentation.disclosure,
+            Some(&presentation.binding()?),
+            policy,
+        )?;
+        Ok((grant, presentation, verdict))
+    }
+
+    /// An unsigned admit of a grant sent to this identifier.
+    pub fn admit(&self, grant: &Grant, message: &str) -> Result<Admit, ControllerError> {
+        Admit::new(grant, message).map_err(ipex_error)
+    }
+
+    /// The admit signed with `sig`, to deliver to the grant's sender.
+    pub fn finalize_admit(
+        &self,
+        admit: Admit,
+        sig: SelfSigningPrefix,
+    ) -> Result<Vec<u8>, ControllerError> {
+        admit
+            .signed(vec![self.exchange_signature(sig)?])
+            .to_cesr()
+            .map_err(ipex_error)
+    }
+
+    /// Reads an admit sent to this identifier and verifies its signatures.
+    pub fn receive_admit(&self, bytes: &[u8]) -> Result<Admit, ControllerError> {
+        let admit = Admit::parse(bytes).map_err(ipex_error)?;
+        if admit.exchange.data.recipient != self.id {
+            return Err(ControllerError::OtherError(format!(
+                "the admit is for {}, not {}",
+                admit.exchange.data.recipient, self.id
+            )));
+        }
+        admit
+            .verify(&self.known_events.storage)
+            .map_err(ipex_error)?;
+        Ok(admit)
+    }
+}
+
+fn ipex_error(e: IpexError) -> ControllerError {
+    match e {
+        IpexError::Registry(e) => ControllerError::RegistryError(e),
+        e => ControllerError::OtherError(e.to_string()),
     }
 }

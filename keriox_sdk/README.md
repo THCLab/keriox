@@ -72,6 +72,7 @@ let verified = keri.verify(their_signed_message)?;
 | rotate keys | `Identity::rotate` |
 | end an identity for good, then forget it | `Identity::abandon`, `Keri::remove_identity` |
 | issue / revoke credentials, verify a presented one | `Identity::issue`, `Identity::revoke`, `Keri::verify_credential` |
+| hand credentials over and acknowledge them (IPEX) | `Identity::grant`, `Identity::receive_grant`, `Identity::admit`, `Identity::receive_admit` |
 | verify strangers | `Identity::oobi_url` / `Identity::kel` + `Keri::import_contact` |
 | device backup / recovery | `Identity::export`, `IdentityBuilder::restore_from` |
 | delegate (phone acts under your main identity) | `IdentityBuilder::delegated_by`, `Identity::pending_requests` |

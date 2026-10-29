@@ -26,6 +26,7 @@ pub mod protocol;
 pub mod signing;
 pub mod status;
 pub mod store;
+pub mod ipex;
 pub mod registry;
 pub mod types;
 
@@ -82,6 +83,7 @@ pub use keri_core::{
     event::sections::seal::EventSeal, event_message::signature::Signature,
     prefix::IndexedSignature, query::query_event::QueryEvent,
 };
+pub use teliox::ipex::{Admit, Grant, IpexError};
 pub use teliox::registry::{
     AcdcBinding, Blinding, Disclosure, Pending, Policy, Presentation, RegistryError,
     RegistryState, Salt, StateBlock, Verdict,

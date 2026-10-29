@@ -47,6 +47,9 @@ cover.
 | the current presentation of one I issued | `identity.presentation(&id)` |
 | list what I've issued | `identity.credentials()` |
 | issue from a group | `group.issue(schema, attributes).await` |
+| hand it to someone (IPEX grant) | `identity.grant(&presentation, &their_id, "message")`, deliver the bytes |
+| receive a granted credential | `identity.receive_grant(&grant)` (verifies the sender, judges the credential) |
+| acknowledge a grant (IPEX admit) | `identity.admit(&grant, "message")`, then `identity.receive_admit(&admit)` on the other side |
 | build ACDCs with edges, rules, graduated disclosure | `keri_sdk::acdc` with `advanced::registry::issue` |
 
 ## Backup & recovery
