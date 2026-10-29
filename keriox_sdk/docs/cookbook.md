@@ -82,9 +82,9 @@ cover.
 | store events in Postgres | `Keri::open_with_storage(path, StorageConfig::Postgres { url })` (feature `storage-postgres`) |
 | use my own seed storage (OS keychain) | implement `advanced::SecretsStore`, pass to `KeriStore::open_with_options` |
 | tune network retries | `Keri::open_with(path, RetryPolicy { .. })` |
-| fetch a KEL without local state | `advanced::EphemeralIdentifier::{pull_kel, pull_tel, pull_ksn}` |
+| fetch a KEL without local state | `advanced::EphemeralIdentifier::{pull_kel, pull_ksn}` |
 | query watchers / full logs manually | `advanced::Identifier::{query_full_log, finalize_query}` |
-| process raw KEL/TEL CESR streams | `advanced::Controller::{process_kel_stream, process_tel_stream}` |
+| process a raw KEL CESR stream | `advanced::Controller::process_kel_stream` |
 | reach the underlying crates directly | `advanced::raw::{keri_core, keri_controller, teliox, cesrox, said}` |
 
 If you find yourself writing the same `advanced::` sequence repeatedly, that
