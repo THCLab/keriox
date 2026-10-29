@@ -31,7 +31,7 @@ use crate::{
 };
 #[cfg(feature = "mailbox")]
 use crate::{
-    mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
+    mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
     query::mailbox::MailboxRoute,
 };
 pub use cesrox::cesr_proof::MaterialPath;
@@ -139,14 +139,28 @@ pub fn process_signed_oobi<D: EventDatabase + 'static, S: OobiStorageBackend>(
     Ok(())
 }
 
+/// A forward that verified: who it is for, under which topic, and the key
+/// event it forwards, with its own signatures, receipts and seals.
 #[cfg(feature = "mailbox")]
-pub fn process_signed_exn<D: EventDatabase>(
-    exn: SignedExchange,
+#[derive(Debug, Clone, PartialEq)]
+pub struct Forwarded {
+    pub sender: IdentifierPrefix,
+    pub recipient: IdentifierPrefix,
+    pub topic: ForwardTopic,
+    pub event: crate::event_message::signed_event_message::SignedEventMessage,
+}
+
+/// Verifies a forward: signed by its sender, every signature valid against
+/// the signers' key states in `storage`, and carrying the one key event
+/// `a.evt` names, for the recipient `ri` names.
+#[cfg(feature = "mailbox")]
+pub fn verify_forward<D: EventDatabase>(
+    exn: &SignedExchange,
     storage: &EventStorage<D>,
-) -> Result<(), Error> {
+) -> Result<Forwarded, Error> {
     let exn_message = &exn.exchange_message;
     // The sender must sign the exchange (signatures MUST be attached to the
-    // message body); an exchange with none reaches no mailbox.
+    // message body).
     if exn.signature.is_empty() {
         return Err(Error::MissingSignatures);
     }
@@ -169,42 +183,31 @@ pub fn process_signed_exn<D: EventDatabase>(
             .try_fold(true, |acc, signature| -> Result<bool, Error> {
                 Ok(acc && signature.verify(&exn_message.encode()?, storage)?)
             });
-    if verification_result? {
-        process_exn(exn_message, &exn.nested, storage)
-    } else {
-        Err(Error::SignatureVerificationError)
+    if !verification_result? {
+        return Err(Error::SignatureVerificationError);
     }
-}
-
-#[cfg(feature = "mailbox")]
-fn process_exn<D: EventDatabase>(
-    exn: &ExchangeMessage,
-    nested: &[Message],
-    storage: &EventStorage<D>,
-) -> Result<(), Error> {
-    let exchange = &exn.data.content.data;
+    let exchange = &exn_message.data.content.data;
     let (recipient, topic) = match exchange {
         Exchange::Fwd { args, .. } => (&args.recipient_id, &args.topic),
         Exchange::Other { route, .. } => return Err(Error::UnsupportedRoute(route.clone())),
     };
-    // `ri` names the recipient of the exchange, the AID whose mailbox a
-    // forward is for.
-    if recipient != &exn.data.recipient {
+    // `ri` names the recipient of the exchange, the AID a forward is for.
+    if recipient != &exn_message.data.recipient {
         return Err(Error::SemanticError(format!(
             "the forward is for {recipient}, the exchange names {} as its recipient",
-            exn.data.recipient
+            exn_message.data.recipient
         )));
     }
     // The one message forwarded, with its own signatures, receipts and
-    // seals; the mailbox keeps key events.
-    let forwarded = match nested {
+    // seals: a key event.
+    let forwarded = match exn.nested.as_slice() {
         [Message::Notice(Notice::Event(event))] => event,
         [_] => {
             return Err(Error::SemanticError(
-                "a mailbox keeps forwarded key events only".into(),
+                "a forward carries a key event".into(),
             ))
         }
-        _ => {
+        nested => {
             return Err(Error::SemanticError(format!(
                 "a forward carries one message, this one {}",
                 nested.len()
@@ -216,12 +219,26 @@ fn process_exn<D: EventDatabase>(
             "the forwarded message is not the one a.evt names".into(),
         ));
     }
-    match topic {
+    Ok(Forwarded {
+        sender: exn_message.data.sender.clone(),
+        recipient: recipient.clone(),
+        topic: topic.clone(),
+        event: forwarded.clone(),
+    })
+}
+
+#[cfg(feature = "mailbox")]
+pub fn process_signed_exn<D: EventDatabase>(
+    exn: SignedExchange,
+    storage: &EventStorage<D>,
+) -> Result<(), Error> {
+    let forwarded = verify_forward(&exn, storage)?;
+    match forwarded.topic {
         ForwardTopic::Multisig => {
-            storage.add_mailbox_multisig(recipient, forwarded.clone())?;
+            storage.add_mailbox_multisig(&forwarded.recipient, forwarded.event)?;
         }
         ForwardTopic::Delegate => {
-            storage.add_mailbox_delegate(recipient, forwarded.clone())?;
+            storage.add_mailbox_delegate(&forwarded.recipient, forwarded.event)?;
         }
     };
     Ok(())
