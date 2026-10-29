@@ -381,6 +381,36 @@ pub(crate) mod tests {
             self.last = ixn.digest().unwrap();
         }
 
+        /// The Issuer's signature on `data`, bound to its latest
+        /// establishment event, as an exchange carries it.
+        pub(crate) fn sign(
+            &self,
+            data: &[u8],
+        ) -> keri_core::event_message::signature::Signature {
+            use keri_core::event_message::signature::{Signature, SignerData};
+            let seal = self
+                .storage
+                .get_last_establishment_event_seal(&self.id)
+                .unwrap();
+            let sig = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(data).unwrap());
+            Signature::Transferable(
+                SignerData::EventSeal(seal),
+                vec![IndexedSignature::new_both_same(sig, 0)],
+            )
+        }
+
+        /// The Issuer's KEL as a CESR stream.
+        pub(crate) fn kel(&self) -> Vec<u8> {
+            use keri_core::event_message::signed_event_message::Message;
+            self.storage
+                .get_kel_messages_with_receipts_all(&self.id)
+                .unwrap()
+                .unwrap()
+                .into_iter()
+                .flat_map(|notice| Message::Notice(notice).to_cesr().unwrap())
+                .collect()
+        }
+
         /// Abandons the identifier: a rotation to the revealed next key,
         /// committing to no next keys.
         pub(crate) fn abandon(&mut self) {

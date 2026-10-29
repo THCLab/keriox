@@ -16,3 +16,10 @@ uv pip install --quiet --python "$venv/bin/python" -r "$here/keripy/requirements
 
 "$venv/bin/python" -I -W ignore "$here/keripy/check.py" "$here/keriox" \
     "$here/keripy/cross_check.txt" "$@"
+
+# IPEX: keripy's own handler accepts a grant keriox writes.
+grant="$(mktemp)"
+trap 'rm -f "$grant"' EXIT
+(cd "$here/.." && IPEX_KERIOX_OUT="$grant" cargo test --quiet -p teliox --lib \
+    ipex::tests::writes_a_keriox_grant_for_keripy >/dev/null)
+"$venv/bin/python" -I -W ignore "$here/acdc/ipex/check_keriox.py" "$grant"
