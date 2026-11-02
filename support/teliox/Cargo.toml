@@ -21,7 +21,7 @@ cesrox = { version = "=2.0.0-rc.2" }
 thiserror = "1.0"
 chrono = "0.4.45"
 # ACDC 2.0 messages, registry events and blinded state blocks.
-acdc = { git = "https://gerrit.colossi.network/acdc-rust", branch = "cefa" }
+acdc = "0.2.0"
 redb = { version = "2.6.4", optional = true }
 sqlx = { version = "0.8", features = ["postgres", "runtime-async-std"], optional = true }
 async-std = { version = "1", features = ["attributes"], optional = true }
