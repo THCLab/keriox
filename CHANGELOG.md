@@ -1,3 +1,91 @@
+## [0.19.0-rc.9] - 2026-11-02
+
+### 🚀 Features
+
+- *(workspace)* Witnesses and watchers write KERI 2.0 by default
+- *(core)* [**breaking**] Write and read exchange messages as the KERI specification defines them
+- *(core)* Read the KERI 2.0 OOBI query and replies
+- *(core)* [**breaking**] Read routed messages of any route and the xip, pro and bar types
+- *(core)* Accept superseding recovery rotations
+- *(core)* Keep the disputed branch of a superseded KEL
+- *(core)* Apply superseding rule C through chains of delegators
+- *(core)* [**breaking**] Number events in first-seen order and recover witnessed KELs
+- *(core)* [**breaking**] Write key state notices in keripy's shape
+- *(core)* [**breaking**] Know the endpoint roles keripy and the specification use
+- *(core)* [**breaking**] Forward a message nested in the exchange, as keripy does
+- *(core)* Build typed events under any version string
+- *(teliox)* Read and write ACDC 2.0 registry messages and blinded states
+- *(core)* Read the digests a key event's seals commit to
+- *(teliox)* Verify an ACDC 2.0 registry against the Issuer's KEL
+- *(teliox)* Keep, issue and accept ACDC 2.0 registries
+- *(sdk)* Re-export the key provider interface
+- *(teliox)* Present a credential with its registry
+- *(sdk)* [**breaking**] Issue credentials as ACDC 2.0 with a registry each
+- *(witness)* [**breaking**] Stop backing and serving TELs
+- *(watcher)* [**breaking**] Stop relaying TELs
+- *(teliox)* Grant and admit credentials by IPEX
+- *(sdk)* Hand credentials over by IPEX grant and admit
+- *(controller)* [**breaking**] Collect receipts by KEL query and hand forwards to the app
+- *(witness)* [**breaking**] Keep no mailbox and take no forwards
+
+### 🐛 Bug Fixes
+
+- *(sdk)* Do not roll a member's keys twice when retrying a group rotation
+- *(watcher)* Verify the signer of TEL queries
+- *(watcher)* Refuse mailbox queries instead of panicking
+- *(sdk)* Keep the witness threshold on rotations that do not set one
+- *(controller)* Report an unexpected mailbox response instead of panicking
+- *(core)* Report unreachable locations instead of panicking in transports
+- *(core)* Build with only the oobi feature
+- *(controller)* Refuse to verify streams that carry no signature
+- *(core)* Refuse unknown cesrox codes instead of panicking
+- *(sdk)* Keep transferable keys across rotations
+- *(controller)* Report a missing watcher or location for TEL messages
+- *(controller)* Reach peers that advertise only https locations
+- *(watcher)* Refuse mailbox queries in process_op instead of panicking
+- *(core)* Refuse non-OOBI replies in OOBI storage and the reply escrow
+- *(controller)* Finalize end_role_cut replies instead of panicking
+- *(controller)* Refuse stray exchanges and unexpected delegate events
+- *(core)* Refuse bodies whose version string names another kind
+- *(core)* Refuse a non-transferable prefix that commits to next keys
+- *(core)* Refuse weighted thresholds that can never be met
+- *(core)* Require registrar backer seals under the RB trait
+- *(core)* Read only KERI version strings as KERI versions
+- *(watcher)* Keep the tracked AIDs across restarts
+- *(core)* Drop escrowed events after a 15 minute timeout
+- *(core)* Answer client-side query errors with 4xx
+- *(sdk)* Read the signed replies of a reply stream
+- *(core)* Do not take an unanchored delegated event for duplicity
+- *(core)* Store event type tags alike whatever the build's features
+
+### 🚜 Refactor
+
+- *(core)* Read and write only CESR 2.0 attachments
+- *(teliox)* Build registries on acdc-rust and judge them by policy
+- *(teliox)* [**breaking**] Remove the KERI 1.0 TEL
+- *(core)* Verify a forward apart from keeping it
+- *(core)* [**breaking**] Name the forward messages exchange, not mailbox
+
+### 📚 Documentation
+
+- *(sdk)* Drop TEL entries from the cookbook
+
+### 🧪 Testing
+
+- *(watcher)* Corrupt the query signature without overflowing
+- *(tests)* Bound the watcher polling loops and run tel_from_watcher in CI
+- *(controller)* Run test_kel_managing_with_witness against local witnesses
+- *(tests)* Say why three stream vectors are not accepted
+- *(core)* Compile the library tests without the query feature
+- *(teliox)* Pin how a validator judges a registry disclosure cut short
+
+### 📦 Build
+
+- *(deps)* Take acdc 0.2.0 from crates.io
+
+### ⚙️ Miscellaneous Tasks
+
+- *(github)* Move off the unmaintained actions-rs actions and outdated majors
 ## [0.19.0-rc.8] - 2026-10-23
 
 ### 🚀 Features
