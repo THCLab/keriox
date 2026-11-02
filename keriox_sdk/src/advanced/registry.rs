@@ -135,7 +135,9 @@ pub fn presentation(id: &Identifier, acdc: Acdc) -> Result<Presentation> {
 
 /// Judges a presented credential against its issuer's KEL as known here,
 /// and keeps its registry if it is valid. Resolve the issuer's KEL first;
-/// until its anchors are known the verdict is indeterminate.
+/// until its anchors are known the verdict is indeterminate. Registry
+/// events kept here count with the presented ones, as in
+/// [`Identifier::accept_disclosure`].
 ///
 /// # Errors
 /// - [`Error::Controller`] if the registry store fails.

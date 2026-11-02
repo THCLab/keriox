@@ -526,8 +526,10 @@ impl Keri {
     /// The issuer's key history must be known to one of this store's
     /// identities or contacts ([`Keri::import_contact`]); until it holds
     /// the events anchoring the registry, the status is
-    /// [`CredentialStatus::Indeterminate`]. The state is the state
-    /// presented: a revocation is seen only once it is presented.
+    /// [`CredentialStatus::Indeterminate`]. The state is the latest one
+    /// this store has been shown: a revocation is seen once it is presented,
+    /// and a presentation cut short of a revocation seen before is judged
+    /// revoked.
     pub fn verify_credential(&self, presentation: &[u8]) -> Result<CredentialStatus> {
         self.verify_credential_with(presentation, &teliox::registry::Policy::default())
     }

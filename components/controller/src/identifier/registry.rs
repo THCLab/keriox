@@ -129,6 +129,8 @@ where
 
     /// Judges a disclosed registry against the Issuer's KEL as known here,
     /// and keeps it if it is valid. The Issuer's KEL must be known first.
+    /// The registry events kept here count with the disclosed ones, so a
+    /// disclosure cut short of an update kept here is judged at that update.
     pub fn accept_disclosure(
         &self,
         disclosure: &Disclosure,

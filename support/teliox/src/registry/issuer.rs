@@ -265,6 +265,49 @@ mod tests {
         assert_eq!(found.state(), "revoked");
     }
 
+    /// A Validator that has not seen the revocation judges a disclosure cut
+    /// short of it from what is presented alone: the revoked block without
+    /// its update is refused, and the issued state is valid as presented,
+    /// since nothing presented proves a later update.
+    #[test]
+    fn a_disclosure_cut_short_is_judged_as_presented() {
+        let mut issuer = Issuer::new();
+        let registrar = RegistryIssuer::new(MemoryRegistryStore::new());
+        let blinding = Blinding::private();
+        let rip = registrar.incept(&issuer.id).unwrap();
+        anchor(&mut issuer, &registrar, &rip);
+        let registry = rip.event.said().unwrap();
+        let issued = registrar.issue(&registry, &blinding, &acdc()).unwrap();
+        anchor(&mut issuer, &registrar, &issued);
+        let issued_disclosure = registrar.disclosure(&registry).unwrap();
+        let revoked = registrar.revoke(&registry, &blinding, &acdc()).unwrap();
+        anchor(&mut issuer, &registrar, &revoked);
+
+        let presented = AcdcBinding {
+            said: acdc(),
+            issuer: issuer.id.clone(),
+            registry: Some(registry.clone()),
+        };
+        let mut cut = registrar.disclosure(&registry).unwrap();
+        cut.updates.pop();
+        let validator = Validator::new(MemoryRegistryStore::new(), Policy::default());
+        let verdict = validator
+            .accept(&issuer.storage, &cut, Some(&presented))
+            .unwrap();
+        assert!(
+            matches!(verdict, Verdict::Rejected(RegistryError::Blind(_))),
+            "{verdict:?}"
+        );
+        assert!(validator.store().events(&registry).unwrap().is_empty());
+
+        let state = valid(
+            validator
+                .accept(&issuer.storage, &issued_disclosure, Some(&presented))
+                .unwrap(),
+        );
+        assert_eq!(state.state.as_deref(), Some("issued"));
+    }
+
     /// A public registry's blocks carry no blind: anyone can tell the state.
     #[test]
     fn a_public_registry_carries_no_blind() {
