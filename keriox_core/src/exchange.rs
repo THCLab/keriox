@@ -1,3 +1,6 @@
+//! Exchange messages: the `/fwd` forward that carries a key event from one
+//! identifier to another, delivered by whatever channel the parties use.
+
 use crate::event_message::keri_version::KeriVersion;
 use said::derivation::{HashFunction, HashFunctionCode};
 use said::SelfAddressingIdentifier;

@@ -8,7 +8,7 @@ use keri_core::{
         KeyEvent,
     },
     event_message::msg::KeriEvent,
-    mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic},
+    exchange::{Exchange, ExchangeMessage, ForwardTopic},
 };
 use teliox::registry::RegistryStore;
 

@@ -5,7 +5,7 @@
 
 use keri_controller::{
     controller::Controller, error::ControllerError, identifier::Identifier,
-    mailbox_updating::ActionRequired, LocationScheme,
+    ActionRequired, LocationScheme,
 };
 use keri_core::{
     database::{EscrowCreator, EventDatabase},

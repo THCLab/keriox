@@ -1,6 +1,4 @@
-use keri_controller::{
-    error::ControllerError, mailbox_updating::ActionRequired, KeyManager, SelfSigningPrefix,
-};
+use keri_controller::{error::ControllerError, ActionRequired, KeyManager, SelfSigningPrefix};
 use keri_core::actor::prelude::Message;
 use keri_tests::{
     collect_receipts, handle_delegation_request, settings::InfrastructureContext, setup_identifier,

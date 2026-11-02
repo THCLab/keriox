@@ -12,7 +12,7 @@ use keri_core::{
         signed_event_message::{Message, Notice, Op},
         EventTypeTag,
     },
-    mailbox::exchange::{ForwardTopic, SignedExchange},
+    exchange::{ForwardTopic, SignedExchange},
     oobi::LocationScheme,
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},

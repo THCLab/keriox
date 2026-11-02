@@ -15,7 +15,7 @@ storage-redb = ["keri-core/storage-redb", "redb"]
 storage-postgres = ["keri-core/storage-postgres", "sqlx", "async-std"]
 
 [dependencies]
-keri-core = {path = "../../keriox_core", version= "0.19.0-rc.8", features = ["mailbox"] }
+keri-core = {path = "../../keriox_core", version= "0.19.0-rc.8", features = ["exchange"] }
 said = { version = "=2.0.0-rc.4" }
 cesrox = { version = "=2.0.0-rc.2" }
 thiserror = "1.0"

@@ -18,7 +18,7 @@ use keri_core::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
     },
     keys::PublicKey,
-    mailbox::exchange::ForwardTopic,
+    exchange::ForwardTopic,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor, escrow::EscrowConfig, event_storage::EventStorage,

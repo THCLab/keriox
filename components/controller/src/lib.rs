@@ -5,8 +5,10 @@ pub mod communication;
 pub mod controller;
 pub mod identifier;
 pub mod known_events;
-pub mod mailbox_updating;
 pub mod oobi;
+
+mod action_required;
+pub use action_required::ActionRequired;
 
 pub use keri_core::oobi::{EndRole, LocationScheme, Oobi};
 pub use keri_core::prefix::{

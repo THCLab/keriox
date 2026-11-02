@@ -33,7 +33,7 @@ use keri_core::{
         timestamped::Timestamped,
         EventTypeTag,
     },
-    mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
+    exchange::{Exchange, ForwardTopic, SignedExchange},
     oobi::{EndRole, LocationScheme, Role, Scheme},
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{
@@ -464,7 +464,7 @@ fn streams() -> Vec<Value> {
         keri_core::event_message::keri_version::KeriVersion::V2_0,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256.into(),
-        keri_core::mailbox::exchange::ExchangeBody {
+        keri_core::exchange::ExchangeBody {
             sender: id.clone(),
             recipient: id.clone(),
             exchange: String::new(),

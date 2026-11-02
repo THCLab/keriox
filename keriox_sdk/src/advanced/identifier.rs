@@ -23,7 +23,7 @@ use crate::advanced::types::VerificationIssue;
 
 pub use keri_controller::identifier::query::WatcherResponseError;
 pub use keri_controller::identifier::mechanics::forwards::Forward;
-pub use keri_controller::mailbox_updating::ActionRequired;
+pub use keri_controller::ActionRequired;
 
 use keri_core::prefix::IndexedSignature;
 

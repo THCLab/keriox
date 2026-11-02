@@ -411,7 +411,7 @@ pub fn delegation_request<S: SigningBackend>(
     delegator: &IdentifierPrefix,
     awaiting: &AwaitingDelegator,
 ) -> Result<Forward> {
-    use keri_core::{actor::event_generator, mailbox::exchange::ForwardTopic};
+    use keri_core::{actor::event_generator, exchange::ForwardTopic};
     let exn = event_generator::exchange(id.id(), delegator, &awaiting.event, ForwardTopic::Delegate)
         .encode()
         .map_err(|e| Error::EncodingError(e.to_string()))?;
@@ -1333,7 +1333,7 @@ pub async fn accept_multisig_event<S: SigningBackend + Clone + 'static>(
 
     let mut signed_exchanges = Vec::with_capacity(exchange_jsons.len());
     for exn_json in exchange_jsons {
-        let exn: keri_core::mailbox::exchange::ExchangeMessage = serde_json::from_str(exn_json)
+        let exn: keri_core::exchange::ExchangeMessage = serde_json::from_str(exn_json)
             .map_err(|e| Error::EncodingError(format!("exchange JSON: {e}")))?;
         let encoded_exn = exn
             .encode()
@@ -1369,7 +1369,7 @@ pub(crate) async fn finalize_group_anchor<S: SigningBackend + Clone + 'static>(
 ) -> Result<Vec<Forward>> {
     use keri_core::actor::event_generator;
     use keri_core::event_message::signature::{Signature, SignerData};
-    use keri_core::mailbox::exchange::ForwardTopic;
+    use keri_core::exchange::ForwardTopic;
 
     let exn = event_generator::exchange(
         member,

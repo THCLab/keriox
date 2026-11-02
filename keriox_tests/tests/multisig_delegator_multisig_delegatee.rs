@@ -1,5 +1,5 @@
 use keri_controller::{
-    error::ControllerError, mailbox_updating::ActionRequired, KeyManager, SelfSigningPrefix,
+    error::ControllerError, ActionRequired, KeyManager, SelfSigningPrefix,
 };
 use keri_core::actor::prelude::Message;
 use keri_tests::{

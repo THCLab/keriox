@@ -10,7 +10,7 @@ pub mod delegate;
 pub mod group;
 pub mod kel_managing;
 pub mod forwards;
-mod mailbox;
+mod requests;
 pub mod notify_witness;
 pub mod watcher_configuration;
 

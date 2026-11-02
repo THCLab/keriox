@@ -19,7 +19,7 @@ storage-postgres = ["sqlx", "async-std"]
 query = []
 oobi = ["query", "url", "strum_macros", "strum"]
 oobi-manager = ["oobi", "query", "storage-redb", "reqwest", "async-trait"]
-mailbox = ["query", "storage-redb"]
+exchange = ["query", "storage-redb"]
 
 [dependencies]
 semver = "1"

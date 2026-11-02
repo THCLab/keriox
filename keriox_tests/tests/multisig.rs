@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use keri_controller::{
     config::ControllerConfig, controller::Controller, identifier::mechanics::MechanicsError,
-    mailbox_updating::ActionRequired, Oobi,
+    ActionRequired, Oobi,
 };
 use keri_core::{
     actor::prelude::Message,

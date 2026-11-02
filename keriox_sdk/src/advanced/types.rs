@@ -202,7 +202,7 @@ impl DelegationConfig {
 pub struct DelegationRequest {
     pub(crate) delegating_event:
         keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
-    pub(crate) exchange: keri_core::mailbox::exchange::ExchangeMessage,
+    pub(crate) exchange: keri_core::exchange::ExchangeMessage,
 }
 
 impl DelegationRequest {
@@ -212,8 +212,8 @@ impl DelegationRequest {
     }
 
     /// Consume and return the underlying `ActionRequired` for low-level storage.
-    pub fn into_action_required(self) -> keri_controller::mailbox_updating::ActionRequired {
-        keri_controller::mailbox_updating::ActionRequired::DelegationRequest(
+    pub fn into_action_required(self) -> keri_controller::ActionRequired {
+        keri_controller::ActionRequired::DelegationRequest(
             self.delegating_event,
             self.exchange,
         )
@@ -252,14 +252,14 @@ impl DelegationRequest {
     }
 }
 
-impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for DelegationRequest {
-    type Error = keri_controller::mailbox_updating::ActionRequired;
+impl TryFrom<keri_controller::ActionRequired> for DelegationRequest {
+    type Error = keri_controller::ActionRequired;
 
     fn try_from(
-        action: keri_controller::mailbox_updating::ActionRequired,
+        action: keri_controller::ActionRequired,
     ) -> std::result::Result<Self, Self::Error> {
         match action {
-            keri_controller::mailbox_updating::ActionRequired::DelegationRequest(ev, exn) => {
+            keri_controller::ActionRequired::DelegationRequest(ev, exn) => {
                 Ok(DelegationRequest {
                     delegating_event: ev,
                     exchange: exn,
@@ -323,7 +323,7 @@ pub struct GroupRotationConfig {
 #[derive(Debug, Clone)]
 pub struct MultisigRequest {
     pub(crate) event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
-    pub(crate) exchange: keri_core::mailbox::exchange::ExchangeMessage,
+    pub(crate) exchange: keri_core::exchange::ExchangeMessage,
 }
 
 impl MultisigRequest {
@@ -362,8 +362,8 @@ impl MultisigRequest {
     }
 
     /// Consume and return the underlying `ActionRequired` for low-level storage.
-    pub fn into_action_required(self) -> keri_controller::mailbox_updating::ActionRequired {
-        keri_controller::mailbox_updating::ActionRequired::MultisigRequest(
+    pub fn into_action_required(self) -> keri_controller::ActionRequired {
+        keri_controller::ActionRequired::MultisigRequest(
             self.event,
             self.exchange,
         )
@@ -431,14 +431,14 @@ impl MultisigRequest {
     }
 }
 
-impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for MultisigRequest {
-    type Error = keri_controller::mailbox_updating::ActionRequired;
+impl TryFrom<keri_controller::ActionRequired> for MultisigRequest {
+    type Error = keri_controller::ActionRequired;
 
     fn try_from(
-        action: keri_controller::mailbox_updating::ActionRequired,
+        action: keri_controller::ActionRequired,
     ) -> std::result::Result<Self, Self::Error> {
         match action {
-            keri_controller::mailbox_updating::ActionRequired::MultisigRequest(ev, exn) => {
+            keri_controller::ActionRequired::MultisigRequest(ev, exn) => {
                 Ok(MultisigRequest {
                     event: ev,
                     exchange: exn,
@@ -493,7 +493,7 @@ impl PendingRequest {
     }
 
     /// Consume and return the underlying `ActionRequired` for low-level storage.
-    pub fn into_action_required(self) -> keri_controller::mailbox_updating::ActionRequired {
+    pub fn into_action_required(self) -> keri_controller::ActionRequired {
         match self {
             Self::Delegation(r) => r.into_action_required(),
             Self::Multisig(r) => r.into_action_required(),
@@ -501,20 +501,20 @@ impl PendingRequest {
     }
 }
 
-impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for PendingRequest {
-    type Error = keri_controller::mailbox_updating::ActionRequired;
+impl TryFrom<keri_controller::ActionRequired> for PendingRequest {
+    type Error = keri_controller::ActionRequired;
 
     fn try_from(
-        action: keri_controller::mailbox_updating::ActionRequired,
+        action: keri_controller::ActionRequired,
     ) -> std::result::Result<Self, Self::Error> {
         match action {
-            keri_controller::mailbox_updating::ActionRequired::DelegationRequest(ev, exn) => {
+            keri_controller::ActionRequired::DelegationRequest(ev, exn) => {
                 Ok(PendingRequest::Delegation(DelegationRequest {
                     delegating_event: ev,
                     exchange: exn,
                 }))
             }
-            keri_controller::mailbox_updating::ActionRequired::MultisigRequest(ev, exn) => {
+            keri_controller::ActionRequired::MultisigRequest(ev, exn) => {
                 Ok(PendingRequest::Multisig(MultisigRequest {
                     event: ev,
                     exchange: exn,

@@ -2,7 +2,7 @@
 //! message that names its sender `i`, its recipient `ri`, its transaction
 //! `x` and the prior message `p` before `dt`. The sender must have signed
 //! it, and a forward goes to the mailbox of the recipient it names.
-#![cfg(feature = "mailbox")]
+#![cfg(feature = "exchange")]
 
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ use keri_core::{
         EventTypeTag,
     },
     error::Error,
-    mailbox::exchange::{ExchangeMessage, ForwardTopic, SignedExchange},
+    exchange::{ExchangeMessage, ForwardTopic, SignedExchange},
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::Signer,

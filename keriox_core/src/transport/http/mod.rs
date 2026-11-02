@@ -49,7 +49,7 @@ pub trait HttpTransport {
                         // {url}/register
                         loc.url.join("register").unwrap()
                     }
-                    #[cfg(feature = "mailbox")]
+                    #[cfg(feature = "exchange")]
                     Op::Exchange(_) => {
                         // {url}/forward
                         loc.url.join("forward").unwrap()

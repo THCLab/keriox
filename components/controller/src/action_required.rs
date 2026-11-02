@@ -1,7 +1,5 @@
 // use super::{error::ControllerError, identifier_controller::IdentifierController};
-use keri_core::{
-    event::KeyEvent, event_message::msg::KeriEvent, mailbox::exchange::ExchangeMessage,
-};
+use keri_core::{event::KeyEvent, event_message::msg::KeriEvent, exchange::ExchangeMessage};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ActionRequired {

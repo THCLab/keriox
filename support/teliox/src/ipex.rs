@@ -22,7 +22,7 @@ use keri_core::{
         signature::{get_signatures, signatures_into_groups, Signature},
         timestamped::Timestamped,
     },
-    mailbox::exchange::{Exchange, ExchangeBody, ExchangeMessage},
+    exchange::{Exchange, ExchangeBody, ExchangeMessage},
     prefix::IdentifierPrefix,
     processor::{event_storage::EventStorage, validator::EventValidator},
 };
@@ -606,7 +606,7 @@ mod tests {
         // a.o names the ACDC's registry instead of the ACDC.
         let other_said = text(&vectors, "registry").to_string();
         let mut other = grant.exchange.clone();
-        if let keri_core::mailbox::exchange::Exchange::Other { attributes, .. } =
+        if let keri_core::exchange::Exchange::Other { attributes, .. } =
             &mut other.data.content.data
         {
             attributes.0[1].1 = keri_core::event_message::field_map::FieldValue::List(vec![

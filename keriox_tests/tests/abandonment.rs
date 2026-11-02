@@ -9,9 +9,8 @@ use keri_controller::{
     config::ControllerConfig,
     error::ControllerError,
     identifier::mechanics::{forwards::Forward, MechanicsError},
-    mailbox_updating::ActionRequired,
-    BasicPrefix, CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi,
-    RedbController, RedbIdentifier, SelfSigningPrefix,
+    ActionRequired, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme,
+    Oobi, RedbController, RedbIdentifier, SelfSigningPrefix,
 };
 use keri_core::{
     actor::{error::ActorError, prelude::Message},

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use keri_controller::{mailbox_updating::ActionRequired, IdentifierPrefix};
+use keri_controller::{ActionRequired, IdentifierPrefix};
 use keri_controller::{config::ControllerConfig, controller::Controller, error::ControllerError};
 use keri_core::{
     prefix::{BasicPrefix, CesrPrimitive, SelfSigningPrefix},

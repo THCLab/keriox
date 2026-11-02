@@ -3,9 +3,9 @@ pub mod database;
 pub mod error;
 pub mod event;
 pub mod event_message;
+#[cfg(feature = "exchange")]
+pub mod exchange;
 pub mod keys;
-#[cfg(feature = "mailbox")]
-pub mod mailbox;
 #[cfg(feature = "oobi")]
 pub mod oobi;
 #[cfg(feature = "oobi-manager")]

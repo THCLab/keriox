@@ -33,10 +33,10 @@ use crate::query::{
     reply_event::{ReplyEvent, SignedReply},
 };
 
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 use crate::{
     event_message::signature,
-    mailbox::exchange::{ExchangeMessage, SignedExchange},
+    exchange::{ExchangeMessage, SignedExchange},
     query::mailbox::{MailboxQuery, SignedMailboxQuery},
 };
 
@@ -406,11 +406,11 @@ pub fn parse_event_type(input: &[u8]) -> Result<EventType, ParseError> {
 pub enum EventType {
     KeyEvent(KeriEvent<KeyEvent>),
     Receipt(Receipt),
-    #[cfg(feature = "mailbox")]
+    #[cfg(feature = "exchange")]
     Exn(ExchangeMessage),
     #[cfg(feature = "query")]
     Qry(QueryEvent),
-    #[cfg(feature = "mailbox")]
+    #[cfg(feature = "exchange")]
     MailboxQry(MailboxQuery),
     #[cfg(any(feature = "query", feature = "oobi"))]
     Rpy(ReplyEvent),
@@ -432,9 +432,9 @@ impl EventType {
             EventType::Qry(qry) => &qry.serialization_info,
             #[cfg(any(feature = "query", feature = "oobi"))]
             EventType::Rpy(rpy) => &rpy.serialization_info,
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             EventType::Exn(exn) => &exn.serialization_info,
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             EventType::MailboxQry(qry) => &qry.serialization_info,
             EventType::Xip(xip) => &xip.serialization_info,
             EventType::Pro(pro) => &pro.serialization_info,
@@ -450,9 +450,9 @@ impl EventType {
             EventType::Qry(qry) => qry.encode(),
             #[cfg(feature = "query")]
             EventType::Rpy(rpy) => rpy.encode(),
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             EventType::Exn(exn) => exn.encode(),
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             EventType::MailboxQry(qry) => qry.encode(),
             EventType::Xip(xip) => xip.encode(),
             EventType::Pro(pro) => pro.encode(),
@@ -573,7 +573,7 @@ impl From<SignedKelQuery> for CesrMessage {
     }
 }
 
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 impl From<SignedMailboxQuery> for CesrMessage {
     fn from(ev: SignedMailboxQuery) -> Self {
         let groups = signatures_into_groups(&[ev.signature]);
@@ -591,13 +591,13 @@ impl From<SignedQueryMessage> for CesrMessage {
     fn from(ev: SignedQueryMessage) -> Self {
         match ev {
             SignedQueryMessage::KelQuery(kqry) => CesrMessage::from(kqry),
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             SignedQueryMessage::MailboxQuery(mqry) => CesrMessage::from(mqry),
         }
     }
 }
 
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 impl From<SignedExchange> for CesrMessage {
     fn from(ev: SignedExchange) -> Self {
         CesrMessage {
@@ -633,12 +633,12 @@ fn read_by_type(raw: &[u8], kind: &SerializationFormats) -> Result<EventType, Pa
     match ilk {
         T::Icp | T::Rot | T::Ixn | T::Dip | T::Drt => decode(raw, kind).map(EventType::KeyEvent),
         T::Rct => decode(raw, kind).map(EventType::Receipt),
-        #[cfg(feature = "mailbox")]
+        #[cfg(feature = "exchange")]
         T::Exn => decode(raw, kind).map(EventType::Exn),
         #[cfg(feature = "query")]
         T::Qry => {
             let query = decode(raw, kind).map(EventType::Qry);
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             let query = query.or_else(|_| decode(raw, kind).map(EventType::MailboxQry));
             query
         }
@@ -689,7 +689,7 @@ impl TryFrom<Payload> for EventType {
             EventType::Qry(qry) => Some(qry.data.sender.is_some()),
             #[cfg(any(feature = "query", feature = "oobi"))]
             EventType::Rpy(rpy) => Some(rpy.data.sender.is_some()),
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             EventType::MailboxQry(qry) => Some(qry.data.sender.is_some()),
             EventType::Pro(pro) => Some(pro.data.sender.is_some()),
             EventType::Bar(bar) => Some(bar.data.sender.is_some()),
@@ -698,7 +698,7 @@ impl TryFrom<Payload> for EventType {
         // The KERI specification defines the exchange messages, prods and
         // bare messages in KERI 2.0 only.
         let keri2_only = match &event {
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             EventType::Exn(_) => Some("an exchange message"),
             EventType::Xip(_) => Some("an exchange transaction inception"),
             EventType::Pro(_) => Some("a prod"),
@@ -745,9 +745,9 @@ impl TryFrom<CesrMessage> for Message {
     fn try_from(value: CesrMessage) -> Result<Self, Self::Error> {
         let event: EventType = value.payload.try_into()?;
         // Only an exchange carries other messages; none is dropped unread.
-        #[cfg(feature = "mailbox")]
+        #[cfg(feature = "exchange")]
         let carries = matches!(event, EventType::Exn(_));
-        #[cfg(not(feature = "mailbox"))]
+        #[cfg(not(feature = "exchange"))]
         let carries = false;
         if !carries && !value.nested.is_empty() {
             return Err(ParseError::AttachmentError(
@@ -761,11 +761,11 @@ impl TryFrom<CesrMessage> for Message {
             EventType::Qry(qry) => Message::Op(signed_query(qry, value.attachments)?),
             #[cfg(feature = "query")]
             EventType::Rpy(rpy) => Message::Op(signed_reply(rpy, value.attachments)?),
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             EventType::Exn(exn) => {
                 Message::Op(signed_exchange(exn, value.attachments, value.nested)?)
             }
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             EventType::MailboxQry(qry) => {
                 Message::Op(signed_management_query(qry, value.attachments)?)
             }
@@ -835,7 +835,7 @@ impl TryFrom<CesrMessage> for SignedReply {
     }
 }
 
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 impl TryFrom<CesrMessage> for SignedExchange {
     type Error = ParseError;
 
@@ -871,7 +871,7 @@ fn decode_transferable_receipt(
 }
 
 /// A KERI 2.0 routed message names its sender, who must be its signer.
-#[cfg(any(feature = "query", feature = "mailbox"))]
+#[cfg(any(feature = "query", feature = "exchange"))]
 fn check_sender(
     sender: &Option<crate::prefix::IdentifierPrefix>,
     signature: &crate::event_message::signature::Signature,
@@ -951,7 +951,7 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Pars
     Ok(Op::Query(qry))
 }
 
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 fn signed_management_query(
     qry: MailboxQuery,
     mut attachments: Vec<Group>,
@@ -1127,7 +1127,7 @@ fn signed_receipt(event_message: Receipt, attachments: Vec<Group>) -> Result<Not
     Err(ParseError::AttachmentError("Improper payload type".into()))
 }
 
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 pub fn signed_exchange(
     exn: ExchangeMessage,
     attachments: Vec<Group>,
@@ -1136,7 +1136,7 @@ pub fn signed_exchange(
     use super::signature::{Nontransferable, Signature, SignerData};
 
     // A forward carries the one message whose body digest `a.evt` names.
-    if let crate::mailbox::exchange::Exchange::Fwd { .. } = &exn.data.content.data {
+    if let crate::exchange::Exchange::Fwd { .. } = &exn.data.content.data {
         let named = match nested.as_slice() {
             [message] => exn.data.content.data.forwards(&message.payload.to_vec()),
             _ => false,

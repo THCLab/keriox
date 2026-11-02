@@ -1,7 +1,7 @@
 //! An exchange message is only accepted when its sender signed it: the KERI
 //! specification requires signatures attached to the message body. An
 //! exchange without them must not reach anyone's mailbox.
-#![cfg(feature = "mailbox")]
+#![cfg(feature = "exchange")]
 
 use std::sync::Arc;
 
@@ -17,7 +17,7 @@ use keri_core::{
         signed_event_message::{Message, Notice},
         EventTypeTag,
     },
-    mailbox::exchange::{ForwardTopic, SignedExchange},
+    exchange::{ForwardTopic, SignedExchange},
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::Signer,

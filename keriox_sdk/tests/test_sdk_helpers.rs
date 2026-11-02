@@ -142,7 +142,7 @@ async fn test_get_kel_cesr() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_multisig_request_json_roundtrip() {
     use keri_core::event_message::signed_event_message::Notice;
-    use keri_core::mailbox::exchange::ForwardTopic;
+    use keri_core::exchange::ForwardTopic;
 
     let tmp = TempDir::new().unwrap();
     let store = KeriStore::open(tmp.path().to_path_buf()).unwrap();

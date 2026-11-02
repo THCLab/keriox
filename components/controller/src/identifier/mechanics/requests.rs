@@ -9,13 +9,13 @@ use keri_core::{
         signed_event_message::{Message, Notice, SignedEventMessage},
         EventTypeTag,
     },
-    mailbox::exchange::ForwardTopic,
+    exchange::ForwardTopic,
     oobi_manager::storage::OobiStorageBackend,
     prefix::IdentifierPrefix,
 };
 use teliox::registry::RegistryStore;
 
-use crate::{identifier::Identifier, mailbox_updating::ActionRequired};
+use crate::{identifier::Identifier, ActionRequired};
 
 use super::{forwards::ResponseProcessingError, MechanicsError};
 

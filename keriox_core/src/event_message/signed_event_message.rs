@@ -19,8 +19,8 @@ use crate::{
     state::{EventSemantics, IdentifierState},
 };
 
-#[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::SignedExchange;
+#[cfg(feature = "exchange")]
+use crate::exchange::SignedExchange;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
@@ -41,7 +41,7 @@ pub enum Notice {
 #[cfg(any(feature = "query", feature = "oobi"))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
-    #[cfg(feature = "mailbox")]
+    #[cfg(feature = "exchange")]
     Exchange(SignedExchange),
     #[cfg(feature = "query")]
     Reply(SignedReply),
@@ -77,7 +77,7 @@ impl From<Op> for CesrMessage {
             Op::Reply(ksn) => CesrMessage::from(ksn),
             #[cfg(feature = "query")]
             Op::Query(qry) => CesrMessage::from(qry),
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             Op::Exchange(exn) => CesrMessage::from(exn),
         }
     }
@@ -116,7 +116,7 @@ impl Op {
         match self {
             Op::Reply(reply) => reply.reply.get_prefix(),
             Op::Query(qry) => qry.prefix(),
-            #[cfg(feature = "mailbox")]
+            #[cfg(feature = "exchange")]
             // the exchange's recipient, ri
             Op::Exchange(exn) => exn.exchange_message.data.recipient.clone(),
         }
@@ -359,7 +359,7 @@ pub mod tests {
         };
     }
 
-    #[cfg(feature = "mailbox")]
+    #[cfg(feature = "exchange")]
     #[test]
     fn test_deserialize_signed_exchange() {
         use crate::event_message::signed_event_message::Op;

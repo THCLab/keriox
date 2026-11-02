@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 async-trait = "0.1.92"
 futures = "0.3.34"
-keri-core = { path = "../keriox_core", features = ["oobi", "mailbox"] }
+keri-core = { path = "../keriox_core", features = ["oobi", "exchange"] }
 cesrox = { version = "=2.0.0-rc.2" }
 chrono = "0.4"
 serde = "1"

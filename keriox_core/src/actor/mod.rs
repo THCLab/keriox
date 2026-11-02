@@ -29,9 +29,9 @@ use crate::{
     prefix::IdentifierPrefix,
     processor::Processor,
 };
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 use crate::{
-    mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
+    exchange::{Exchange, ForwardTopic, SignedExchange},
 };
 pub use cesrox::cesr_proof::MaterialPath;
 
@@ -40,7 +40,7 @@ pub mod event_generator;
 
 #[cfg(feature = "query")]
 pub mod possible_response;
-#[cfg(all(feature = "mailbox", feature = "oobi-manager"))]
+#[cfg(all(feature = "exchange", feature = "oobi-manager"))]
 pub mod simple_controller;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, ParseError> {
@@ -74,7 +74,7 @@ pub fn parse_reply_stream(stream: &[u8]) -> Result<Vec<SignedReply>, ParseError>
     messages.into_iter().map(SignedReply::try_from).collect()
 }
 
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, ParseError> {
     let messages = parse_cesr_stream_many(stream)?;
     messages.into_iter().map(SignedExchange::try_from).collect()
@@ -140,7 +140,7 @@ pub fn process_signed_oobi<D: EventDatabase + 'static, S: OobiStorageBackend>(
 
 /// A forward that verified: who it is for, under which topic, and the key
 /// event it forwards, with its own signatures, receipts and seals.
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Forwarded {
     pub sender: IdentifierPrefix,
@@ -152,7 +152,7 @@ pub struct Forwarded {
 /// Verifies a forward: signed by its sender, every signature valid against
 /// the signers' key states in `storage`, and carrying the one key event
 /// `a.evt` names, for the recipient `ri` names.
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 pub fn verify_forward<D: EventDatabase>(
     exn: &SignedExchange,
     storage: &EventStorage<D>,
@@ -256,7 +256,7 @@ pub fn process_signed_query<D: EventDatabase>(
         }
         // Witnesses witness and keep no mailbox: forwards go between the
         // parties through any channel, a messagebox for instance.
-        #[cfg(feature = "mailbox")]
+        #[cfg(feature = "exchange")]
         SignedQueryMessage::MailboxQuery(_) => Err(QueryError::Unsupported("mbx".into()).into()),
     }
 }

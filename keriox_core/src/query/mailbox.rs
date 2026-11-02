@@ -42,7 +42,7 @@ impl MailboxQuery {
     }
 }
 
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "r")]
 pub enum MailboxRoute {

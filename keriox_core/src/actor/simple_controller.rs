@@ -22,8 +22,8 @@ use said::version::format::SerializationFormats;
 use super::{
     event_generator, prelude::Message, process_notice, process_signed_oobi, verify_forward,
 };
-#[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{Exchange, ForwardTopic, SignedExchange};
+#[cfg(feature = "exchange")]
+use crate::exchange::{Exchange, ForwardTopic, SignedExchange};
 use crate::{
     error::Error,
     event::{
@@ -582,7 +582,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         ))
     }
 
-    #[cfg(feature = "mailbox")]
+    #[cfg(feature = "exchange")]
     pub fn query_mailbox(&self, witness: &BasicPrefix) -> SignedQueryMessage {
         use crate::query::mailbox::{MailboxQuery, MailboxRoute, QueryArgsMbx, QueryTopics};
 
@@ -625,7 +625,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
 
     /// Returns exn message that contains signed multisig event and will be
     /// forward to group identifier's mailbox.
-    #[cfg(feature = "mailbox")]
+    #[cfg(feature = "exchange")]
     pub fn process_own_multisig(
         &mut self,
         event: SignedEventMessage,
@@ -684,7 +684,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         ));
 
         let ixn = self.anchor(&vec![seal])?;
-        #[cfg(feature = "mailbox")]
+        #[cfg(feature = "exchange")]
         self.create_forward_message(&id, &ixn, ForwardTopic::Delegate)
     }
 
@@ -704,7 +704,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         ));
 
         let ixn = self.anchor_group(group_id, &vec![seal])?;
-        #[cfg(feature = "mailbox")]
+        #[cfg(feature = "exchange")]
         self.create_forward_message(&group_id, &ixn, ForwardTopic::Multisig)
     }
 

@@ -4,15 +4,14 @@ use keri_controller::{
     config::ControllerConfig,
     error::ControllerError,
     identifier::{mechanics::forwards::Forward, Identifier},
-    mailbox_updating::ActionRequired,
     registry::RegistryStore,
-    BasicPrefix, CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, RedbController,
-    RedbIdentifier, SelfSigningPrefix,
+    ActionRequired, BasicPrefix, CryptoBox, IdentifierPrefix, KeyManager, LocationScheme,
+    RedbController, RedbIdentifier, SelfSigningPrefix,
 };
 use keri_core::{
     actor::error::ActorError,
     database::{EscrowCreator, EventDatabase},
-    mailbox::exchange::{Exchange, ForwardTopic},
+    exchange::{Exchange, ForwardTopic},
     oobi_manager::storage::OobiStorageBackend,
     prefix::IndexedSignature,
     transport::test::TestTransport,

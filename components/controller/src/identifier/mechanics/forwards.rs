@@ -9,7 +9,7 @@ use keri_core::{
     actor::{prelude::Message, verify_forward},
     database::{EscrowCreator, EventDatabase},
     event_message::{cesr_adapter::parse_cesr_stream_many, signed_event_message::Op},
-    mailbox::exchange::ForwardTopic,
+    exchange::ForwardTopic,
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::query_event::{QueryEvent, QueryRoute},
@@ -19,7 +19,7 @@ use teliox::registry::RegistryStore;
 use crate::{
     error::ControllerError,
     identifier::{query::WatcherResponseError, Identifier},
-    mailbox_updating::ActionRequired,
+    ActionRequired,
 };
 
 use super::MechanicsError;

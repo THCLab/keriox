@@ -1,8 +1,8 @@
 use crate::event_message::keri_version::KeriVersion;
 use said::SelfAddressingIdentifier;
 
-#[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic};
+#[cfg(feature = "exchange")]
+use crate::exchange::{Exchange, ExchangeMessage, ForwardTopic};
 #[cfg(feature = "oobi")]
 use crate::oobi::{EndRole, Role};
 #[cfg(feature = "oobi")]
@@ -372,7 +372,7 @@ pub fn generate_end_role(
 /// An `exn` from `sender` forwarding `data` to `receipient` under `topic`.
 /// It names `data` by the digest of its body; `data` itself travels nested
 /// in the exchange's attachments.
-#[cfg(feature = "mailbox")]
+#[cfg(feature = "exchange")]
 pub fn exchange(
     sender: &IdentifierPrefix,
     receipient: &IdentifierPrefix,
