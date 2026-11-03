@@ -875,3 +875,150 @@ mod query_status {
         );
     }
 }
+
+/// A watcher serves the locations it learned of other endpoints as those
+/// endpoints signed them, so a client can check them against the endpoint
+/// itself and not against the watcher.
+mod forwarded_locations {
+    use std::sync::Arc;
+
+    use actix_web::{body::to_bytes, http::StatusCode, web};
+    use keri_core::{
+        actor::{
+            parse_event_stream,
+            prelude::{HashFunctionCode, SerializationFormats},
+        },
+        event_message::{
+            keri_version::KeriVersion,
+            signature::{couplets_verify, Nontransferable, Signature},
+            signed_event_message::{Message, Op},
+        },
+        oobi::{LocationScheme, Role, Scheme},
+        oobi_manager::RedbOobiStorage,
+        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
+        signer::Signer,
+    };
+    use tempfile::{Builder, TempDir};
+    use url::Url;
+
+    use crate::{watcher_listener::http_handlers, Watcher, WatcherConfig};
+
+    struct Fixture {
+        _dir: TempDir,
+        watcher: Arc<Watcher<RedbOobiStorage>>,
+        witness: IdentifierPrefix,
+    }
+
+    /// A watcher that learned a witness's location from the witness.
+    fn setup() -> Fixture {
+        let dir = Builder::new().prefix("watcher-fwd-loc").tempdir().unwrap();
+        let watcher = Arc::new(
+            Watcher::setup_with_redb(WatcherConfig {
+                public_address: Url::parse("http://watcher-under-test/").unwrap(),
+                db_path: dir.path().to_owned(),
+                ..Default::default()
+            })
+            .unwrap(),
+        );
+        let witness_signer = Signer::new();
+        let witness_key = BasicPrefix::Ed25519NT(witness_signer.public_key());
+        let witness = IdentifierPrefix::Basic(witness_key.clone());
+        let reply = ReplyEvent::new_reply(
+            ReplyRoute::LocScheme(LocationScheme::new(
+                witness.clone(),
+                Scheme::Http,
+                Url::parse("http://witness-under-test/").unwrap(),
+            )),
+            &witness,
+            KeriVersion::V2_0,
+            HashFunctionCode::Blake3_256,
+            SerializationFormats::JSON,
+        );
+        let signature = witness_signer.sign(reply.encode().unwrap()).unwrap();
+        watcher
+            .watcher_data
+            .process_reply(SignedReply::new_nontrans(
+                reply,
+                witness_key,
+                SelfSigningPrefix::Ed25519Sha512(signature),
+            ))
+            .unwrap();
+        Fixture {
+            _dir: dir,
+            watcher,
+            witness,
+        }
+    }
+
+    /// Every reply in `body`, checked the way a client parses it.
+    fn replies(body: &[u8]) -> Vec<SignedReply> {
+        parse_event_stream(body)
+            .expect("a client parses what the watcher serves")
+            .into_iter()
+            .map(|msg| match msg {
+                Message::Op(Op::Reply(rpy)) => rpy,
+                other => panic!("expected a reply, got {other:?}"),
+            })
+            .collect()
+    }
+
+    fn assert_signed_by(rpy: &SignedReply, signer: &IdentifierPrefix) {
+        assert_eq!(rpy.signature.get_signer().as_ref(), Some(signer));
+        let Signature::NonTransferable(Nontransferable::Couplet(couplets)) = &rpy.signature else {
+            panic!("expected a couplet, got {:?}", rpy.signature);
+        };
+        assert!(couplets_verify(couplets, &rpy.reply.encode().unwrap()));
+    }
+
+    #[actix_web::test]
+    async fn a_witness_location_is_served_as_the_witness_signed_it() {
+        let fx = setup();
+        let controller = IdentifierPrefix::Basic(BasicPrefix::Ed25519(Signer::new().public_key()));
+        let response = http_handlers::resolve_role(
+            web::Path::from((controller, Role::Witness, fx.witness.clone())),
+            web::Data::new(fx.watcher.clone()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+
+        let replies = replies(&body);
+        assert_eq!(replies.len(), 1);
+        assert_signed_by(&replies[0], &fx.witness);
+    }
+
+    #[actix_web::test]
+    async fn a_location_asked_for_by_eid_is_served_as_its_endpoint_signed_it() {
+        let fx = setup();
+        let response = http_handlers::resolve_location(
+            web::Path::from(fx.witness.clone()),
+            web::Data::new(fx.watcher.clone()),
+        )
+        .await
+        .unwrap();
+        let body = to_bytes(response.into_body()).await.unwrap();
+
+        let replies = replies(&body);
+        assert_eq!(replies.len(), 1);
+        assert_signed_by(&replies[0], &fx.witness);
+    }
+
+    #[actix_web::test]
+    async fn the_watcher_location_is_signed_by_the_watcher() {
+        let fx = setup();
+        let own = IdentifierPrefix::Basic(fx.watcher.prefix());
+        let response = http_handlers::resolve_location(
+            web::Path::from(own.clone()),
+            web::Data::new(fx.watcher.clone()),
+        )
+        .await
+        .unwrap();
+        let body = to_bytes(response.into_body()).await.unwrap();
+
+        let replies = replies(&body);
+        assert_eq!(replies.len(), 1);
+        assert_signed_by(&replies[0], &own);
+    }
+}

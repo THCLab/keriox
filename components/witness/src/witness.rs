@@ -291,19 +291,12 @@ impl<S: OobiStorageBackend> Witness<S> {
         )
     }
 
+    /// The locations of `eid` as `eid` signed them: a location reply is
+    /// accepted only signed by the endpoint it locates (this witness's own
+    /// is signed at setup), and one signed again here would not verify as
+    /// the endpoint's.
     pub fn get_loc_scheme_for_id(&self, eid: &IdentifierPrefix) -> Result<Vec<SignedReply>, Error> {
-        let oobis_to_sign = self.oobi_manager.get_loc_scheme(eid)?;
-        oobis_to_sign
-            .iter()
-            .map(|oobi_to_sing| {
-                let signature = self.signer.sign(oobi_to_sing.encode().unwrap()).unwrap();
-                Ok(SignedReply::new_nontrans(
-                    oobi_to_sing.clone(),
-                    self.prefix.clone(),
-                    SelfSigningPrefix::Ed25519Sha512(signature),
-                ))
-            })
-            .collect()
+        Ok(self.oobi_manager.get_signed_loc_scheme(eid)?)
     }
 
     /// The key state notice of `prefix` in a reply signed by `signer`, both

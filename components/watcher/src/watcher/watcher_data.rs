@@ -157,25 +157,20 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     }
 
     /// Get location scheme from OOBI manager and sign it.
+    /// The locations of `eid` as `eid` signed them. A location reply is
+    /// accepted only signed by the endpoint it locates (the watcher's own
+    /// included, signed at setup), so it is served with that signature:
+    /// signed again by the watcher, a client would refuse it as not signed
+    /// by its sender.
     pub fn get_loc_scheme_for_id(
         &self,
         eid: &IdentifierPrefix,
     ) -> Result<Vec<SignedReply>, ActorError> {
-        let loc_scheme = self.oobi_manager.get_loc_scheme(eid)?;
+        let loc_scheme = self.oobi_manager.get_signed_loc_scheme(eid)?;
         if loc_scheme.is_empty() {
-            return Err(ActorError::NoLocation { id: eid.clone() });
+            Err(ActorError::NoLocation { id: eid.clone() })
         } else {
-            loc_scheme
-                .iter()
-                .map(|oobi_to_sing| {
-                    let signature = self.signer.sign(oobi_to_sing.encode()?)?;
-                    Ok(SignedReply::new_nontrans(
-                        oobi_to_sing.clone(),
-                        self.prefix.clone(),
-                        SelfSigningPrefix::Ed25519Sha512(signature),
-                    ))
-                })
-                .collect::<Result<_, ActorError>>()
+            Ok(loc_scheme)
         }
     }
 

@@ -107,13 +107,27 @@ impl<S: OobiStorageBackend> OobiManager<S> {
     /// unless that reply nullified the location with an empty url.
     pub fn get_loc_scheme(&self, id: &IdentifierPrefix) -> Result<Vec<ReplyEvent>, OobiError> {
         Ok(self
+            .get_signed_loc_scheme(id)?
+            .into_iter()
+            .map(|e| e.reply)
+            .collect())
+    }
+
+    /// The locations `id` currently has, as `id` signed them: the replies
+    /// [`Self::get_loc_scheme`] returns, with the signatures they were
+    /// accepted with. Serve these to others; a reply signed again by
+    /// whoever serves it no longer verifies as the endpoint's own.
+    pub fn get_signed_loc_scheme(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<SignedReply>, OobiError> {
+        Ok(self
             .store
             .get_oobis_for_eid(id)
             .map_err(|e| OobiError::Db(e.to_string()))?
             .into_iter()
-            .map(|e| e.reply)
-            .filter(|reply| {
-                !matches!(reply.get_route(), ReplyRoute::LocScheme(loc) if loc.url.is_none())
+            .filter(|rpy| {
+                !matches!(rpy.reply.get_route(), ReplyRoute::LocScheme(loc) if loc.url.is_none())
             })
             .collect())
     }

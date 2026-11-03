@@ -1954,3 +1954,62 @@ mod designation {
         assert!(receipted_by(&witness, &id, 0));
     }
 }
+
+/// A witness serves another endpoint's location as that endpoint signed it,
+/// and its own as it signed it itself.
+#[test]
+fn a_location_is_served_as_its_endpoint_signed_it() {
+    use keri_core::{
+        event_message::{
+            keri_version::KeriVersion,
+            signature::{couplets_verify, Nontransferable, Signature},
+        },
+        oobi::{LocationScheme, Scheme},
+        query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
+    };
+
+    let root = Builder::new().prefix("test-loc-fwd").tempdir().unwrap();
+    let witness = Witness::setup_with_redb(
+        Url::parse("http://witness-under-test/").unwrap(),
+        root.path(),
+        None,
+        WitnessEscrowConfig::default(),
+        KeriVersion::V2_0,
+    )
+    .unwrap();
+
+    let other_signer = Signer::new();
+    let other_key = BasicPrefix::Ed25519NT(other_signer.public_key());
+    let other = IdentifierPrefix::Basic(other_key.clone());
+    let reply = ReplyEvent::new_reply(
+        ReplyRoute::LocScheme(LocationScheme::new(
+            other.clone(),
+            Scheme::Http,
+            Url::parse("http://other-witness/").unwrap(),
+        )),
+        &other,
+        KeriVersion::V2_0,
+        HashFunctionCode::Blake3_256,
+        SerializationFormats::JSON,
+    );
+    let signature = other_signer.sign(reply.encode().unwrap()).unwrap();
+    witness
+        .process_reply(SignedReply::new_nontrans(
+            reply,
+            other_key,
+            SelfSigningPrefix::Ed25519Sha512(signature),
+        ))
+        .unwrap();
+
+    let own = IdentifierPrefix::Basic(witness.prefix.clone());
+    for eid in [other, own] {
+        let served = witness.get_loc_scheme_for_id(&eid).unwrap();
+        assert_eq!(served.len(), 1);
+        let rpy = &served[0];
+        assert_eq!(rpy.signature.get_signer().as_ref(), Some(&eid));
+        let Signature::NonTransferable(Nontransferable::Couplet(couplets)) = &rpy.signature else {
+            panic!("expected a couplet, got {:?}", rpy.signature);
+        };
+        assert!(couplets_verify(couplets, &rpy.reply.encode().unwrap()));
+    }
+}
