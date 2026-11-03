@@ -1,3 +1,8 @@
+## [0.19.0-rc.10] - 2026-11-03
+
+### 🐛 Bug Fixes
+
+- *(controller)* Send to the location an endpoint announced last
 ## [0.19.0-rc.9] - 2026-11-02
 
 ### 🚀 Features
