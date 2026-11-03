@@ -10,7 +10,7 @@ pub struct KeyStateNotice {
     /// The KERI version of the notice, written as `vn: [major, minor]`
     /// like keripy's key state records; a notice is a field map inside a
     /// reply, not a message with a version string of its own.
-    #[serde(rename = "vn", with = "version_number")]
+    #[serde(rename = "vn", deserialize_with = "version_number::deserialize")]
     pub version: KeriVersion,
 
     #[serde(flatten)]
@@ -90,7 +90,7 @@ impl KeyStateNotice {
 
 /// `vn`: a KERI version as `[major, minor]`.
 mod version_number {
-    use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+    use serde::{de, Deserialize, Deserializer, Serialize};
 
     use crate::event_message::keri_version::KeriVersion;
 
@@ -104,10 +104,6 @@ mod version_number {
                 KeriVersion::V2_0 => Pair(2, 0),
             }
         }
-    }
-
-    pub fn serialize<S: Serializer>(version: &KeriVersion, s: S) -> Result<S::Ok, S::Error> {
-        Pair::from(*version).serialize(s)
     }
 
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<KeriVersion, D::Error> {
