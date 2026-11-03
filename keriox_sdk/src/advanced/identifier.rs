@@ -152,6 +152,16 @@ impl Identifier {
     })
     }
 
+    /// Tell this identifier which of its current keys this controller signs
+    /// with, when it has several (a group view on a device holding one
+    /// slot). [`Self::notify_witnesses`] then sends an event only when this
+    /// key signs it at the lowest index, for groups whose every member
+    /// holds the fully signed event. Leave it unset when this device alone
+    /// collects the signatures: it then sends every event it finalizes.
+    pub fn set_own_key(&mut self, key: BasicPrefix) {
+        dispatch_mut!(self, i => i.set_own_key(key))
+    }
+
     pub fn witnesses(&self) -> Vec<BasicPrefix> {
         dispatch!(self, i => i.witnesses().collect())
     }

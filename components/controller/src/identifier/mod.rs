@@ -42,6 +42,10 @@ where
     /// receipts yet.)
     cached_state: IdentifierState,
     cached_identifiers: Mutex<HashMap<IdentifierPrefix, IdentifierState>>,
+    /// The current key this controller signs with, when the identifier has
+    /// several: a group view held by a member of one slot. Set by
+    /// [`Self::set_own_key`].
+    own_key: Option<BasicPrefix>,
 }
 
 impl<D, T, S> Identifier<D, T, S>
@@ -87,7 +91,24 @@ where
             query_cache: db,
             cached_state: state,
             cached_identifiers: Mutex::new(HashMap::new()),
+            own_key: None,
         }
+    }
+
+    /// Tell this identifier which of its current keys is this controller's.
+    ///
+    /// Only matters when the identifier has several current keys, as a
+    /// group view on a device holding one slot does, and only for which
+    /// controller sends an event to witnesses. Told its key, a controller
+    /// sends an event only when its own index is the lowest one the event
+    /// is signed at, as in a group whose every member holds the fully
+    /// signed event. Not told, it cannot tell, and sends every event it
+    /// finalizes: right when one device collects the others' signatures
+    /// and is the only one holding the result. The index a single
+    /// signature is attached at never depends on it: it is the key the
+    /// signature verifies against. Either CESR encoding of the key matches.
+    pub fn set_own_key(&mut self, key: BasicPrefix) {
+        self.own_key = Some(key);
     }
 
     pub async fn resolve_oobi(&self, oobi: &Oobi) -> Result<(), MechanicsError> {

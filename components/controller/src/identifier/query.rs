@@ -19,6 +19,7 @@ use keri_core::{
 };
 use teliox::registry::RegistryStore;
 
+use super::mechanics::kel_managing::signature_index;
 use super::Identifier;
 
 #[derive(Debug, PartialEq)]
@@ -174,7 +175,17 @@ where
                 SignedKelQuery::new_nontrans(qry.clone(), bp.clone(), sig)
             }
             _ => {
-                let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
+                // The index of the key the signature verifies against: a
+                // group view's own key need not be the group's first.
+                let index = qry
+                    .encode()
+                    .ok()
+                    .and_then(|data| {
+                        let keys = self.known_events.current_public_keys(&self.id).ok()?;
+                        signature_index(&keys, &data, &sig)
+                    })
+                    .unwrap_or(0);
+                let signatures = vec![IndexedSignature::new_both_same(sig, index as u16)];
                 SignedKelQuery::new_trans(qry.clone(), self.id().clone(), signatures)
             }
         };

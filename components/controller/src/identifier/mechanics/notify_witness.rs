@@ -30,15 +30,21 @@ where
         for ev in &self.to_notify {
             // Elect the leader: identifier with the minimal index among
             // all participants who sign the event sends it to witnesses.
-            let id_idx = self.get_index(&ev.event_message.data).unwrap_or_default();
-            let min_sig_idx = ev
-                .signatures
-                .iter()
-                .map(|at| at.index.current())
-                .min()
-                .expect("event should have at least one signature") as usize;
-            if min_sig_idx != id_idx {
-                continue;
+            // A controller that cannot tell which of several current keys
+            // is its own sends it anyway: a witness takes a copy it already
+            // has, but an event nobody sends is never receipted.
+            if !matches!(self.own_public_key(), Ok(None)) {
+                let id_idx = self.get_index(&ev.event_message.data).unwrap_or_default();
+                let min_sig_idx = ev
+                    .signatures
+                    .iter()
+                    .map(|at| at.index.current())
+                    .min()
+                    .expect("event should have at least one signature")
+                    as usize;
+                if min_sig_idx != id_idx {
+                    continue;
+                }
             }
             // For events whose effect on witness config has already been
             // applied to local state (e.g. a freshly finalized rotation),

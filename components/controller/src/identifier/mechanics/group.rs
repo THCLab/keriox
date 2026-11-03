@@ -456,7 +456,7 @@ where
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, Signature)>,
     ) -> Result<Vec<Forward>, MechanicsError> {
-        let own_index = self.get_index(&key_event.data)?;
+        let own_index = self.own_signature_index(key_event, &sig)?;
 
         self.known_events
             .finalize_key_event(&key_event, &sig, own_index)?;

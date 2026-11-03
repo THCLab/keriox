@@ -325,7 +325,7 @@ where
         // Not an invariant: the lookup fails whenever this
         // identifier's key material and the KEL have drifted apart, so
         // report it rather than unwinding the caller's task.
-        let own_index = self.get_index(&event.data)?;
+        let own_index = self.own_signature_index(event, sig)?;
         let signature = IndexedSignature::new_both_same(sig.clone(), own_index as u16);
 
         let signed_message = event.sign(vec![signature], None, None);
@@ -343,12 +343,74 @@ where
     pub fn index_in_current_keys(&self, key_config: &KeyConfig) -> Result<usize, MechanicsError> {
         // TODO what if group participant is a group and has more than one
         // public key?
-        let own_pk = self.known_events.current_public_keys(&self.id)?[0].clone();
+        let own_pk = self.own_or_first_key()?;
         key_config
             .public_keys
             .iter()
-            .position(|pk| pk.eq(&own_pk))
+            .position(|pk| same_key(pk, &own_pk))
             .ok_or(MechanicsError::NotGroupParticipantError)
+    }
+
+    /// The current key of this identifier this controller signs with: the
+    /// one given to `set_own_key`, while it is still a current key, or the
+    /// only current key. `None` when the identifier has several current
+    /// keys and none is known to be this controller's.
+    pub(crate) fn own_public_key(&self) -> Result<Option<BasicPrefix>, MechanicsError> {
+        let current = self.known_events.current_public_keys(&self.id)?;
+        if let Some(own) = &self.own_key {
+            if let Some(pk) = current.iter().find(|pk| same_key(pk, own)) {
+                return Ok(Some(pk.clone()));
+            }
+        }
+        Ok(match current.as_slice() {
+            [only] => Some(only.clone()),
+            _ => None,
+        })
+    }
+
+    /// [`Self::own_public_key`], or the first current key when it is not
+    /// known: what an identifier with one key, or one controller holding
+    /// all of them, signs with.
+    fn own_or_first_key(&self) -> Result<BasicPrefix, MechanicsError> {
+        match self.own_public_key()? {
+            Some(pk) => Ok(pk),
+            None => self
+                .known_events
+                .current_public_keys(&self.id)?
+                .first()
+                .cloned()
+                .ok_or_else(|| MechanicsError::IdentifierAbandoned(self.id.clone())),
+        }
+    }
+
+    /// The index `sig` signs `event` at: the position of the key it
+    /// verifies against among the keys that sign the event. Falls back to
+    /// [`Self::get_index`] when no key verifies it, leaving the refusal to
+    /// the event's own verification.
+    pub(crate) fn own_signature_index(
+        &self,
+        event: &KeriEvent<KeyEvent>,
+        sig: &SelfSigningPrefix,
+    ) -> Result<usize, MechanicsError> {
+        // Nothing signs for an abandoned identifier, whichever key it uses.
+        let prefix = event.data.get_prefix();
+        if self
+            .known_events
+            .get_state(&prefix)
+            .is_ok_and(|state| state.is_abandoned())
+        {
+            return Err(MechanicsError::IdentifierAbandoned(prefix));
+        }
+        let signing_keys = match &event.data.event_data {
+            EventData::Icp(icp) => icp.key_config.public_keys.clone(),
+            EventData::Dip(dip) => dip.inception_data.key_config.public_keys.clone(),
+            EventData::Rot(rot) | EventData::Drt(rot) => rot.key_config.public_keys.clone(),
+            EventData::Ixn(_) => self.known_events.current_public_keys(&prefix)?,
+        };
+        match signature_index(&signing_keys, &event.encode()?, sig) {
+            Some(index) => Ok(index),
+            None => self.get_index(&event.data),
+        }
     }
 
     /// Helper function for getting the position of identifier's public key in
@@ -366,27 +428,38 @@ where
             EventData::Dip(dip) => self.index_in_current_keys(&dip.inception_data.key_config),
             EventData::Drt(drt) => self.index_in_rotation(&drt.key_config),
             EventData::Ixn(_ixn) => {
-                let own_pk = self.known_events.current_public_keys(&self.id)?[0].clone();
+                let own_pk = self.own_or_first_key()?;
                 self.known_events
                     .current_public_keys(&key_event.get_prefix())?
                     .iter()
-                    .position(|pk| pk.eq(&own_pk))
+                    .position(|pk| same_key(pk, &own_pk))
                     .ok_or(MechanicsError::NotGroupParticipantError)
             }
         }
     }
 
     fn index_in_rotation(&self, key_config: &KeyConfig) -> Result<usize, MechanicsError> {
-        let own_pk = self.known_events.current_public_keys(&self.id)?[0].clone();
-        if let Some(pos) = key_config.public_keys.iter().position(|pk| pk == &own_pk) {
+        let own_pk = self.own_or_first_key()?;
+        if let Some(pos) = key_config
+            .public_keys
+            .iter()
+            .position(|pk| same_key(pk, &own_pk))
+        {
             return Ok(pos);
         }
-        // An abandoned member has no next key that could be revealed.
+        // The next key committed at this controller's own position. An
+        // abandoned member has no next key that could be revealed.
+        let own_position = self
+            .known_events
+            .current_public_keys(&self.id)?
+            .iter()
+            .position(|pk| same_key(pk, &own_pk))
+            .unwrap_or(0);
         let own_npk = self
             .known_events
             .next_keys_hashes(&self.id)?
             .into_iter()
-            .next()
+            .nth(own_position)
             .ok_or_else(|| MechanicsError::IdentifierAbandoned(self.id.clone()))?;
         key_config
             .public_keys
@@ -394,4 +467,21 @@ where
             .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
             .ok_or(MechanicsError::NotGroupParticipantError)
     }
+}
+
+/// Whether `a` and `b` are the same public key, in either CESR encoding: a
+/// key committed non-transferable and the same key in a transferable
+/// identifier's event are different strings for one signer.
+fn same_key(a: &BasicPrefix, b: &BasicPrefix) -> bool {
+    a == b || (a.signing_code() == b.signing_code() && a.derivative() == b.derivative())
+}
+
+/// The position among `keys` of the key `sig` over `data` verifies against.
+pub(crate) fn signature_index(
+    keys: &[BasicPrefix],
+    data: &[u8],
+    sig: &SelfSigningPrefix,
+) -> Option<usize> {
+    keys.iter()
+        .position(|pk| pk.verify(data, sig).unwrap_or(false))
 }
