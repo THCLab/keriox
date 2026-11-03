@@ -210,15 +210,33 @@ where
         }
     }
 
-    /// A location of `id` that can be reached over HTTP, preferring https.
+    /// The location of `id` that can be reached over HTTP: the one `id`
+    /// announced last, and the https one of two announced at the same time.
+    ///
+    /// The store keeps the latest reply per scheme, so an endpoint that
+    /// moved from https to http (or to another host on another scheme)
+    /// still has its old reply here. Preferring https regardless of age
+    /// would keep sending to the address it left; the watcher picks the
+    /// newest location for the same reason.
     pub fn find_http_location(
         &self,
         id: &IdentifierPrefix,
     ) -> Result<LocationScheme, OobiRetrieveError> {
-        let locations = self.get_loc_schemas(id)?;
-        [Scheme::Https, Scheme::Http]
+        self.oobi_manager
+            .get_loc_scheme(id)?
             .into_iter()
-            .find_map(|scheme| locations.iter().find(|loc| loc.scheme == scheme).cloned())
+            .filter_map(|reply| match reply.get_route() {
+                ReplyRoute::LocScheme(loc)
+                    if matches!(loc.scheme, Scheme::Http | Scheme::Https) =>
+                {
+                    Some((reply.get_timestamp(), loc.scheme == Scheme::Https, loc))
+                }
+                _ => None,
+            })
+            .max_by(|(a_dt, a_https, _), (b_dt, b_https, _)| {
+                a_dt.cmp(b_dt).then(a_https.cmp(b_https))
+            })
+            .map(|(_, _, loc)| loc)
             .ok_or(OobiRetrieveError::MissingOobi(
                 id.clone(),
                 Some(Scheme::Http),
@@ -537,5 +555,106 @@ impl PostgresKnownEvents {
         let oobi_storage = PostgresOobiStorage::new(event_db.pool.clone());
         let registries = Arc::new(PostgresRegistryStore::new(event_db.pool.clone()));
         Self::new(event_db, oobi_storage, registries, escrow_config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use keri_core::{
+        actor::prelude::{HashFunctionCode, SerializationFormats},
+        event_message::{
+            keri_version::KeriVersion,
+            msg::KeriEvent,
+            timestamped::{TimeStamp, Timestamped},
+        },
+        oobi::{LocationScheme, Scheme},
+        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        processor::escrow::EscrowConfig,
+        query::reply_event::{ReplyRoute, SignedReply},
+        signer::Signer,
+    };
+    use url::Url;
+
+    use super::RedbKnownEvents;
+
+    /// A location reply `signer` signs for itself at `dt`.
+    fn location(signer: &Signer, scheme: Scheme, url: &str, dt: &str) -> SignedReply {
+        let prefix = BasicPrefix::Ed25519(signer.public_key());
+        let eid = IdentifierPrefix::Basic(prefix.clone());
+        let reply = KeriEvent::new(
+            KeriVersion::V2_0,
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256.into(),
+            Timestamped {
+                sender: Some(eid.clone()),
+                timestamp: TimeStamp::parse_from_rfc3339(dt).unwrap(),
+                data: ReplyRoute::LocScheme(LocationScheme::new(
+                    eid,
+                    scheme,
+                    Url::parse(url).unwrap(),
+                )),
+            },
+        );
+        let signature = signer.sign(reply.encode().unwrap()).unwrap();
+        SignedReply::new_nontrans(reply, prefix, SelfSigningPrefix::Ed25519Sha512(signature))
+    }
+
+    /// An endpoint that moved from https to http keeps its old https
+    /// reply in the store: a reply for one scheme never replaces one for
+    /// another. The location it named is gone, so preferring https because
+    /// it is https sends every message to an address the endpoint left.
+    #[test]
+    fn a_newer_http_location_wins_over_a_stale_https_one() {
+        let signer = Signer::new();
+        let events = RedbKnownEvents::new_in_memory(EscrowConfig::default()).unwrap();
+        let stale = location(
+            &signer,
+            Scheme::Https,
+            "https://old-host/",
+            "2026-06-10T15:40:42.607924+00:00",
+        );
+        let current = location(
+            &signer,
+            Scheme::Http,
+            "http://new-host:3232/",
+            "2026-11-03T11:50:39.033613+00:00",
+        );
+        events.save_oobi(&stale).unwrap();
+        events.save_oobi(&current).unwrap();
+
+        let eid = IdentifierPrefix::Basic(BasicPrefix::Ed25519(signer.public_key()));
+        let found = events.find_http_location(&eid).unwrap();
+        assert_eq!(found.scheme, Scheme::Http);
+        assert_eq!(
+            found.url,
+            Some(Url::parse("http://new-host:3232/").unwrap())
+        );
+    }
+
+    /// The other way round the newer https location is the one to use.
+    #[test]
+    fn a_newer_https_location_wins_over_a_stale_http_one() {
+        let signer = Signer::new();
+        let events = RedbKnownEvents::new_in_memory(EscrowConfig::default()).unwrap();
+        events
+            .save_oobi(&location(
+                &signer,
+                Scheme::Http,
+                "http://old-host/",
+                "2026-04-18T06:34:03.302837+00:00",
+            ))
+            .unwrap();
+        events
+            .save_oobi(&location(
+                &signer,
+                Scheme::Https,
+                "https://new-host/",
+                "2026-10-27T21:41:38.768801+00:00",
+            ))
+            .unwrap();
+
+        let eid = IdentifierPrefix::Basic(BasicPrefix::Ed25519(signer.public_key()));
+        let found = events.find_http_location(&eid).unwrap();
+        assert_eq!(found.scheme, Scheme::Https);
     }
 }
