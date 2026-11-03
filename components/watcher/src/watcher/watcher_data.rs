@@ -185,33 +185,6 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             .map_err(ActorError::from)
     }
 
-    /// The key state notice of `prefix` in a reply signed by `signer`, both
-    /// written in `version`.
-    pub fn get_signed_ksn_for_prefix(
-        &self,
-        prefix: &IdentifierPrefix,
-        signer: Arc<Signer>,
-        version: KeriVersion,
-    ) -> Result<SignedReply, Error> {
-        let ksn = self
-            .event_storage
-            .get_ksn_for_prefix(prefix, version)?;
-        let rpy = ReplyEvent::new_reply(
-            ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
-            &IdentifierPrefix::Basic(self.prefix.clone()),
-            version,
-            HashFunctionCode::Blake3_256,
-            SerializationFormats::JSON,
-        );
-
-        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(&rpy.encode()?)?);
-        Ok(SignedReply::new_nontrans(
-            rpy,
-            self.prefix.clone(),
-            signature,
-        ))
-    }
-
     pub fn get_state_for_prefix(&self, id: &IdentifierPrefix) -> Option<IdentifierState> {
         self.event_storage.get_state(id)
     }
