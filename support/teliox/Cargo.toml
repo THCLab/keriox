@@ -1,6 +1,6 @@
 [package]
 name = "teliox"
-version = "0.19.0-rc.10"
+version = "0.19.0-rc.11"
 description = "ACDC 2.0 state registries (TELs) anchored in KERI key event logs"
 authors.workspace = true
 edition.workspace = true
@@ -15,7 +15,7 @@ storage-redb = ["keri-core/storage-redb", "redb"]
 storage-postgres = ["keri-core/storage-postgres", "sqlx", "async-std"]
 
 [dependencies]
-keri-core = {path = "../../keriox_core", version= "0.19.0-rc.10", features = ["exchange"] }
+keri-core = {path = "../../keriox_core", version= "0.19.0-rc.11", features = ["exchange"] }
 said = { version = "=2.0.0-rc.4" }
 cesrox = { version = "=2.0.0-rc.2" }
 thiserror = "1.0"

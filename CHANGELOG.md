@@ -1,3 +1,14 @@
+## [0.19.0-rc.11] - 2026-11-04
+
+### 🐛 Bug Fixes
+
+- *(watcher)* Serve other endpoints' locations as they signed them
+- *(controller)* Sign as the key that made the signature, not the group's first
+
+### ⚙️ Miscellaneous Tasks
+
+- *(core)* Drop the unused key state notice version serializer
+- *(watcher)* Drop the unused signed key state notice helper
 ## [0.19.0-rc.10] - 2026-11-03
 
 ### 🐛 Bug Fixes
