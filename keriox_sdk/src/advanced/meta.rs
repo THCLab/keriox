@@ -53,6 +53,12 @@ impl MetaDb {
         Ok(Self { db: Arc::new(db) })
     }
 
+    /// Write a consistent copy of the database to a new file at `dest`.
+    pub(crate) fn snapshot_to(&self, dest: &Path) -> Result<()> {
+        keri_core::database::redb::snapshot::copy_database(&self.db, dest)
+            .map_err(|e| Error::PersistenceError(format!("cannot copy meta db: {e}")))
+    }
+
     pub(crate) fn get(&self, alias: &str, field: &str) -> Result<Option<String>> {
         let read_txn = self
             .db

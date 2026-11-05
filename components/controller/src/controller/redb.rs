@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use keri_core::database::redb::RedbDatabase;
 use keri_core::oobi_manager::storage::RedbOobiStorage;
@@ -80,5 +80,18 @@ impl RedbController {
             async_std::task::block_on(controller.setup_witnesses(&initial_oobis)).unwrap();
         }
         Ok(controller)
+    }
+
+    /// Write a consistent copy of each of this controller's databases
+    /// (`events_database`, `query_cache`) into `db_dir` without closing
+    /// them, so a controller in use can be backed up. Each database is
+    /// copied as of one read transaction.
+    pub fn snapshot_to(&self, db_dir: &Path) -> Result<(), ControllerError> {
+        self.known_events
+            .storage
+            .events_db
+            .snapshot_to(&db_dir.join("events_database"))
+            .map_err(|e| ControllerError::DatabaseError(e.to_string()))?;
+        self.cache.snapshot_to(&db_dir.join("query_cache"))
     }
 }

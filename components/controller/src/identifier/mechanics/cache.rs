@@ -26,6 +26,13 @@ impl IdentifierCache {
         Self::from_database(Arc::new(db))
     }
 
+    /// Write a consistent copy of the cache to a new file at `dest`, without
+    /// closing it.
+    pub fn snapshot_to(&self, dest: &Path) -> Result<(), ControllerError> {
+        keri_core::database::redb::snapshot::copy_database(&self.db, dest)
+            .map_err(|e| ControllerError::CacheError(e.to_string()))
+    }
+
     /// Build on an already-open redb `Database` (file-backed or in-memory).
     pub fn from_database(db: Arc<Database>) -> Result<Self, ControllerError> {
         // Create tables if they don't exist

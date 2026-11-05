@@ -25,7 +25,7 @@
 use keri_core::event_message::keri_version::KeriVersion;
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Mutex},
 };
@@ -1228,6 +1228,59 @@ impl KeriStore {
     /// [`SecretsStore`].
     pub fn write_meta(&self, alias: &str, field: &str, content: &str) -> Result<()> {
         self.write_file(alias, field, content)
+    }
+
+    /// Write a consistent copy of every redb database this store keeps on
+    /// disk into `dest`, at the same paths relative to the store root, and
+    /// return those relative paths.
+    ///
+    /// The databases stay open: each is read through the store's own handle
+    /// inside one read transaction, so this works while identifiers are in
+    /// use — including on Windows, where redb locks its files against any
+    /// other reader. Every other file under the root (seeds, legacy
+    /// per-field files) is a plain file the caller copies as is; a store
+    /// opened on `dest` with those files added is a restore of this one.
+    ///
+    /// `dest` must not exist yet. Only a store on
+    /// [`StorageConfig::Redb`](crate::advanced::types::StorageConfig::Redb)
+    /// can be snapshotted.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if `dest` exists, the store is not on
+    ///   redb, or a database cannot be copied.
+    pub fn snapshot_to(&self, dest: &Path) -> Result<Vec<PathBuf>> {
+        if !matches!(self.storage, crate::advanced::types::StorageConfig::Redb) {
+            return Err(Error::PersistenceError(
+                "only a store on redb storage keeps its databases on disk".into(),
+            ));
+        }
+        if dest.exists() {
+            return Err(Error::PersistenceError(format!(
+                "snapshot destination {} already exists",
+                dest.display()
+            )));
+        }
+        let mut written = vec![PathBuf::from("meta")];
+        self.meta.snapshot_to(&dest.join("meta"))?;
+        let db_dirs = match self.layout {
+            Layout::Shared => vec![PathBuf::from("db")],
+            Layout::PerAlias => std::fs::read_dir(&self.root)
+                .map_err(|e| Error::PersistenceError(format!("cannot list store root: {e}")))?
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| entry.path().join("db").is_dir())
+                .map(|entry| PathBuf::from(entry.file_name()).join("db"))
+                .collect(),
+        };
+        for db_dir in db_dirs {
+            if !self.root.join(&db_dir).is_dir() {
+                continue;
+            }
+            let controller = self.get_or_create_controller(self.root.join(&db_dir))?;
+            controller.snapshot_to(&dest.join(&db_dir))?;
+            written.push(db_dir.join("events_database"));
+            written.push(db_dir.join("query_cache"));
+        }
+        Ok(written)
     }
 
     /// Whether the store knows an identity under this alias.

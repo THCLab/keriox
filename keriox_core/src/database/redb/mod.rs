@@ -2,6 +2,7 @@ pub mod escrow_database;
 #[cfg(feature = "query")]
 pub(crate) mod ksn_log;
 pub mod loging;
+pub mod snapshot;
 pub(crate) use super::rkyv_adapter;
 
 /// Kel storage. (identifier, sn) -> event digest
@@ -160,6 +161,13 @@ impl RedbDatabase {
 
     pub fn raw_db(&self) -> Arc<Database> {
         self.db.clone()
+    }
+
+    /// Write a consistent copy of this database (KELs, escrows, OOBIs,
+    /// registries and everything else sharing its file) to a new file at
+    /// `dest`, without closing it. See [`snapshot::copy_database`].
+    pub fn snapshot_to(&self, dest: &Path) -> Result<(), snapshot::SnapshotError> {
+        snapshot::copy_database(&self.db, dest)
     }
 }
 

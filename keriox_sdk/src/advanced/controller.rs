@@ -115,6 +115,19 @@ impl Controller {
         }
     }
 
+    /// Write a consistent copy of this controller's redb databases into
+    /// `db_dir` without closing them; see
+    /// [`KeriStore::snapshot_to`](crate::advanced::store::KeriStore::snapshot_to).
+    pub(crate) fn snapshot_to(&self, db_dir: &std::path::Path) -> Result<()> {
+        match &self.inner {
+            ControllerInner::Redb(controller) => Ok(controller.snapshot_to(db_dir)?),
+            #[cfg(feature = "storage-postgres")]
+            ControllerInner::Postgres(_) => Err(crate::advanced::error::Error::PersistenceError(
+                "a Postgres store keeps its events off disk; back up the database instead".into(),
+            )),
+        }
+    }
+
     /// Create a controller from a full `ControllerConfig`.
     pub fn new_with_config(config: ControllerConfig) -> Result<Self> {
         Ok(Self {
