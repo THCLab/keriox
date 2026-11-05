@@ -1,3 +1,8 @@
+## [0.19.0-rc.12] - 2026-11-05
+
+### 🚀 Features
+
+- *(sdk)* Snapshot a store's databases while it is open
 ## [0.19.0-rc.11] - 2026-11-04
 
 ### 🐛 Bug Fixes
